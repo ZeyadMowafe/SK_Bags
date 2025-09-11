@@ -477,7 +477,7 @@ const handleCheckout = async () => {
               <div className="text-center p-4 sm:p-6 bg-black text-white hover:bg-gray-800 transition-all duration-300 transform hover:-translate-y-1">
                 <div className="text-2xl sm:text-3xl mb-2 sm:mb-4">📱</div>
                 <h3 className="text-sm sm:text-base md:text-lg font-bold mb-1 sm:mb-2">Phone</h3>
-                <p className="text-xs sm:text-sm md:text-base text-gray-300">+20 101 688 7251</p>
+                <p className="text-xs sm:text-sm md:text-base text-gray-300">201016887251+</p>
               </div>
               
               <div className="text-center p-4 sm:p-6 bg-white hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">

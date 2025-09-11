@@ -64,14 +64,14 @@ const ProductCard = ({ product, onAddToCart, onViewDetails }) => {
         }`}></div>
         
         {/* Price tag */}
-        <div className="absolute top-4 right-4 bg-white text-black px-3 py-1 text-sm font-bold shadow-lg rounded">
-          ${product.price}
-        </div>
-        
+<div className="absolute top-4 right-4 bg-black text-white px-5 py-2 text-base tracking-wide font-medium shadow-lg uppercase">
+  EGP {product.price}
+</div>
+
         {/* Multiple Images Indicator */}
         {totalImages > 1 && (
           <div className="absolute top-4 left-4 bg-black/70 text-white px-2 py-1 text-xs rounded-full flex items-center space-x-1">
-            <span>📸</span>
+            <span></span>
             <span>{totalImages}</span>
           </div>
         )}

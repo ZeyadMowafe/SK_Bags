@@ -361,7 +361,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
               <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-4xl font-bold text-black">
-                    ${product.price}
+                    EGP {product.price}
                   </span>
                   <div className="text-right">
                     <div className="text-sm text-gray-600 mb-1">Stock Available</div>

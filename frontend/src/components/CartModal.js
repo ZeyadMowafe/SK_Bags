@@ -87,7 +87,7 @@ const CartModal = ({ cart, updateQuantity, removeFromCart, getTotalPrice, onClos
                             <h3 className="font-semibold text-gray-900 text-lg">{item.name}</h3>
                             <div className="flex items-center gap-2 mt-1">
                               <span className="text-gray-500 text-sm">Unit Price:</span>
-                              <span className="font-medium text-black">${item.price}</span>
+                              <span className="font-medium text-black">EGP {item.price}</span>
                             </div>
                           </div>
                           
@@ -113,7 +113,7 @@ const CartModal = ({ cart, updateQuantity, removeFromCart, getTotalPrice, onClos
                           {/* Subtotal & Delete */}
                           <div className="text-right">
                             <p className="font-bold text-black text-lg">
-                              ${(item.price * item.quantity).toFixed(2)}
+                              EGP {(item.price * item.quantity).toFixed(2)}
                             </p>
                             <button
                               onClick={() => removeFromCart(item.id)}
@@ -136,7 +136,7 @@ const CartModal = ({ cart, updateQuantity, removeFromCart, getTotalPrice, onClos
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between text-gray-600">
                     <span>Subtotal</span>
-                    <span>${getTotalPrice().toFixed(2)}</span>
+                    <span>EGP {getTotalPrice().toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Shipping</span>
@@ -145,7 +145,7 @@ const CartModal = ({ cart, updateQuantity, removeFromCart, getTotalPrice, onClos
                   <div className="h-px bg-gray-300"></div>
                   <div className="flex justify-between items-center">
                     <span className="text-xl font-bold text-black">Total</span>
-                    <span className="text-2xl font-bold text-black">${getTotalPrice().toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-black">EGP {getTotalPrice().toFixed(2)}</span>
                   </div>
                 </div>
                 
@@ -175,12 +175,12 @@ const CartModal = ({ cart, updateQuantity, removeFromCart, getTotalPrice, onClos
                 <div className="space-y-3 bg-gray-50 rounded-lg p-4">
                   <div className="flex justify-between text-gray-600">
                     <span>Total Amount:</span>
-                    <span className="font-semibold text-black">${getTotalPrice().toFixed(2)}</span>
+                    <span className="font-semibold text-black">EGP {getTotalPrice().toFixed(2)}</span>
                   </div>
                   <div className="h-px bg-gray-300"></div>
                   <div className="flex justify-between">
                     <span className="text-gray-700 font-medium">Deposit Required (50%):</span>
-                    <span className="text-xl font-bold text-black">${depositAmount}</span>
+                    <span className="text-xl font-bold text-black">EGP {depositAmount}</span>
                   </div>
                 </div>
               </div>
@@ -194,7 +194,7 @@ const CartModal = ({ cart, updateQuantity, removeFromCart, getTotalPrice, onClos
                   <div className="flex-1">
                     <h4 className="font-bold text-black text-lg mb-3">Step 1: Payment</h4>
                     <p className="text-gray-600 mb-4">
-                      Transfer <span className="font-bold text-black">${depositAmount}</span> via Vodafone Cash to:
+                      Transfer <span className="font-bold text-black">EGP {depositAmount}</span> via Vodafone Cash to:
                     </p>
                     <div className="bg-black text-white p-4 rounded-lg text-center">
                       <span className="text-2xl font-bold tracking-wider">01016887251</span>

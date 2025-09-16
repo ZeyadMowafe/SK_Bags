@@ -1,266 +1,286 @@
-# 👜 Handmade Bags E-commerce Project
+👜 Handmade Bags E-commerce Project
 
-موقع احترافي لبيع الشنط اليدوية المصنوعة يدوياً، مبني بتقنيات حديثة ومتطورة.
+A professional e-commerce platform for selling handmade bags, built with modern and scalable technologies.🚀 Features
+For Customers
 
-## 🚀 المميزات
+✨ Modern and elegant user interface
 
-### للعملاء
-- ✨ واجهة مستخدم حديثة وأنيقة
-- 🛒 سلة تسوق متطورة
-- 📱 تصميم متجاوب مع جميع الأجهزة
-- 🔍 تصفح سهل للمنتجات
-- 💳 نظام طلبات آمن
-- 📞 معلومات تواصل واضحة
+🛒 Advanced shopping cart system
 
-### للمدير
-- 🔐 لوحة تحكم آمنة
-- 📦 إدارة المنتجات (إضافة، تعديل، حذف)
-- 📋 إدارة الطلبات وحالاتها
-- 📊 عرض إحصائيات المبيعات
-- 🖼️ رفع الصور للمنتجات
-- 👥 إدارة المستخدمين
+📱 Fully responsive design across devices
 
-## 🛠️ التقنيات المستخدمة
+🔍 Easy product browsing and filtering
 
-### Frontend
-- **React.js** - مكتبة واجهة المستخدم
-- **Tailwind CSS** - إطار عمل CSS
-- **React Router** - التنقل بين الصفحات
-- **Lucide React** - أيقونات جميلة
-- **Axios** - طلبات HTTP
+💳 Secure ordering system
 
-### Backend
-- **FastAPI** - إطار عمل Python سريع
-- **Supabase** - قاعدة بيانات PostgreSQL
-- **JWT** - مصادقة آمنة
-- **Pydantic** - التحقق من البيانات
-- **Uvicorn** - خادم ASGI
+📞 Clear contact information
 
-### Database
-- **PostgreSQL** - قاعدة بيانات علائقية
-- **Row Level Security (RLS)** - أمان متقدم
-- **Real-time subscriptions** - تحديثات فورية
+For Admin
 
-## 📁 هيكل المشروع
+🔐 Secure admin dashboard
 
-```
+📦 Product management (Add, Edit, Delete)
+
+📋 Order management with status updates
+
+📊 Sales statistics and reports
+
+🖼️ Product image uploads
+
+👥 User management
+
+
+
+🛠️ Tech Stack
+Frontend
+
+React.js – UI library
+
+Tailwind CSS – CSS framework
+
+React Router – Client-side routing
+
+Lucide React – Modern icons
+
+Axios – HTTP requests
+
+Backend
+
+FastAPI – High-performance Python framework
+
+Supabase – PostgreSQL database with RLS
+
+JWT – Secure authentication
+
+Pydantic – Data validation
+
+Uvicorn – ASGI server
+
+Database
+
+PostgreSQL – Relational database
+
+Row Level Security (RLS) – Advanced access control
+
+Real-time Subscriptions – Live updates
+
+📁 Project Structure
 Hand_Made/
-├── frontend/                 # تطبيق React
-│   ├── public/              # الملفات العامة
-│   ├── src/                 # كود المصدر
-│   │   ├── components/      # مكونات React
-│   │   ├── services/        # خدمات API
+├── frontend/                 # React frontend app
+│   ├── public/              
+│   ├── src/                 
+│   │   ├── components/      
+│   │   ├── services/        
 │   │   └── ...
-│   ├── package.json         # تبعيات Frontend
+│   ├── package.json         
 │   └── ...
-├── backend/                 # خادم FastAPI
-│   ├── models.py           # نماذج البيانات
-│   ├── database.py         # إعداد قاعدة البيانات
-│   ├── auth.py             # المصادقة
-│   ├── main.py             # التطبيق الرئيسي
-│   ├── requirements.txt    # تبعيات Python
+├── backend/                  # FastAPI backend
+│   ├── models.py            
+│   ├── database.py          
+│   ├── auth.py              
+│   ├── main.py              
+│   ├── requirements.txt     
 │   └── ...
-├── database/               # ملفات قاعدة البيانات
-│   └── schema.sql         # مخطط قاعدة البيانات
-├── package.json           # تبعيات المشروع الرئيسي
-├── start_all.bat          # تشغيل المشروع كاملاً
-└── README.md              # هذا الملف
-```
+├── database/                
+│   └── schema.sql           
+├── package.json             
+├── start_all.bat            
+└── README.md                
 
-## 🚀 التثبيت والتشغيل
 
-### المتطلبات الأساسية
-- Node.js (v16 أو أحدث)
-- Python (v3.8 أو أحدث)
-- pip (مدير حزم Python)
-- حساب Supabase
+🚀 Installation & Setup
+Prerequisites
 
-### التثبيت السريع
+Node.js (v16+)
 
-1. **استنساخ المشروع**
-   ```bash
-   git clone <repository-url>
-   cd Hand_Made
-   ```
+Python (v3.8+)
 
-2. **تشغيل ملف الباتش (Windows)**
-   ```bash
-   start_all.bat
-   ```
+pip (Python package manager)
 
-   أو يدوياً:
-   ```bash
-   # تثبيت تبعيات المشروع الرئيسي
-   npm install
-   
-   # تثبيت تبعيات Frontend
-   cd frontend
-   npm install
-   cd ..
-   
-   # تثبيت تبعيات Backend
-   cd backend
-   pip install -r requirements.txt
-   cd ..
-   ```
+Supabase account
 
-3. **إعداد قاعدة البيانات**
-   - أنشئ مشروع في Supabase
-   - انسخ بيانات الاتصال
-   - عدّل ملف `backend/.env`
-   - شغل `database/schema.sql` في Supabase
+Quick Start
 
-4. **تشغيل المشروع**
-   ```bash
-   # تشغيل Backend
-   cd backend
-   python run.py
-   
-   # في نافذة جديدة - تشغيل Frontend
-   cd frontend
-   npm start
-   ```
+Clone the repository:
 
-## 🌐 الروابط
+git clone <repository-url>
+cd Hand_Made
 
-- **الموقع الرئيسي**: http://localhost:3000
-- **لوحة التحكم**: http://localhost:3000/admin
-- **API Documentation**: http://localhost:8000/docs
-- **Backend Health**: http://localhost:8000/health
 
-## 🔐 بيانات تسجيل الدخول
+Run with batch script (Windows):
 
-### المدير
-- **البريد الإلكتروني**: admin@handmadebags.com
-- **كلمة المرور**: admin123
+start_all.bat
 
-## 📝 متغيرات البيئة
 
-أنشئ ملف `backend/.env`:
+Or manually:
 
-```env
+# Install main dependencies
+npm install
+
+# Install frontend dependencies
+cd frontend
+npm install
+cd ..
+
+# Install backend dependencies
+cd backend
+pip install -r requirements.txt
+cd ..
+
+
+Setup database:
+
+Create a new project in Supabase
+
+Copy credentials and update backend/.env
+
+Run database/schema.sql in Supabase
+
+Run the project:
+
+# Backend
+cd backend
+python run.py
+
+# Frontend (in new terminal)
+cd frontend
+npm start
+
+
+🌐 URLs
+Main Website: http://localhost:3000
+
+Admin Dashboard: http://localhost:3000/admin
+
+API Docs: http://localhost:8000/docs
+
+Backend Health Check: http://localhost:8000/health
+
+🔐 Default Credentials
+
+Admin
+
+Email: admin@handmadebags.com
+
+Password: admin123
+
+📝 Environment Variables
+
+Create backend/.env:
+
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_KEY=your_supabase_service_key
 SECRET_KEY=your_jwt_secret_key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-```
 
-## 🛠️ الأوامر المفيدة
+📊 API Endpoints
+Products
 
-```bash
-# تشغيل المشروع كاملاً
-npm start
+GET /api/products – Fetch all products
 
-# تشغيل في وضع التطوير
-npm run dev
+GET /api/products/{id} – Fetch single product
 
-# تشغيل Frontend فقط
-npm run start:frontend
+POST /api/admin/products – Add new product
 
-# تشغيل Backend فقط
-npm run start:backend
+PUT /api/admin/products/{id} – Update product
 
-# تثبيت جميع التبعيات
-npm run install:all
-```
+DELETE /api/admin/products/{id} – Delete product
 
-## 📊 API Endpoints
+Orders
 
-### المنتجات
-- `GET /api/products` - جلب جميع المنتجات
-- `GET /api/products/{id}` - جلب منتج محدد
-- `POST /api/admin/products` - إضافة منتج جديد
-- `PUT /api/admin/products/{id}` - تعديل منتج
-- `DELETE /api/admin/products/{id}` - حذف منتج
+GET /api/orders – Fetch all orders
 
-### الطلبات
-- `GET /api/orders` - جلب جميع الطلبات
-- `POST /api/orders` - إنشاء طلب جديد
-- `PUT /api/orders/{id}/status` - تحديث حالة الطلب
+POST /api/orders – Create new order
 
-### المصادقة
-- `POST /api/auth/login` - تسجيل الدخول
-- `POST /api/auth/register` - إنشاء حساب جديد
+PUT /api/orders/{id}/status – Update order status
 
-### الملفات
-- `POST /api/upload-simple` - رفع ملف
+Authentication
 
-## 🔧 التطوير
+POST /api/auth/login – Login
 
-### إضافة مكون جديد
-```bash
+POST /api/auth/register – Register
+
+Files
+
+POST /api/upload-simple – Upload file
+
+🧑‍💻 Development
+
+Add a new component:
+
 cd frontend/src/components
-# أنشئ ملف جديد للمكون
-```
+# create new component file
 
-### إضافة API endpoint جديد
-```bash
+
+Add a new API endpoint:
+
 cd backend
-# أضف endpoint في main.py
-```
+# update main.py
 
-### تحديث قاعدة البيانات
-```bash
+
+Update database schema:
+
 cd database
-# عدّل schema.sql
-# شغل في Supabase
-```
+# modify schema.sql and apply in Supabase
 
-## 🐛 استكشاف الأخطاء
 
-### مشاكل شائعة
+🐛 Troubleshooting
 
-1. **خطأ في تثبيت Pillow**
-   ```bash
-   # جرب تثبيت من wheel
-   pip install --only-binary=all Pillow
-   ```
+Pillow installation error
 
-2. **خطأ في CORS**
-   - تأكد من إعدادات CORS في `backend/main.py`
+pip install --only-binary=all Pillow
 
-3. **خطأ في قاعدة البيانات**
-   - تحقق من متغيرات البيئة
-   - تأكد من تشغيل schema.sql
 
-4. **خطأ في Frontend**
-   ```bash
-   cd frontend
-   rm -rf node_modules package-lock.json
-   npm install
-   ```
+CORS error
+Check CORS settings in backend/main.py.
 
-## 📈 التطوير المستقبلي
+Database error
+Verify .env variables and Supabase schema.
 
-- [ ] نظام دفع إلكتروني
-- [ ] نظام تقييمات ومراجعات
-- [ ] نظام إشعارات
-- [ ] تطبيق موبايل
-- [ ] نظام إدارة المخزون
-- [ ] تقارير وإحصائيات متقدمة
-- [ ] نظام العروض والخصومات
-- [ ] دعم متعدد اللغات
+Frontend error
 
-## 🤝 المساهمة
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
 
-1. Fork المشروع
-2. أنشئ branch جديد (`git checkout -b feature/AmazingFeature`)
-3. Commit التغييرات (`git commit -m 'Add some AmazingFeature'`)
-4. Push للbranch (`git push origin feature/AmazingFeature`)
-5. أنشئ Pull Request
+📈 Future Improvements
 
-## 📄 الترخيص
+Online payment system
 
-هذا المشروع مرخص تحت رخصة MIT - انظر ملف [LICENSE](LICENSE) للتفاصيل.
+Ratings & reviews system
 
-## 📞 الدعم
+Notifications system
 
-- **البريد الإلكتروني**: support@handmadebags.com
-- **الهاتف**: +20 123 456 7890
-- **العنوان**: القاهرة، مصر
+Mobile app (Flutter)
 
----
+Inventory management
 
-**صنع بـ ❤️ في مصر**
+Advanced analytics & reports
+
+Discounts & promotions system
+
+Multi-language support
+
+🤝 Contribution
+
+Fork the project
+
+Create a new branch (git checkout -b feature/AmazingFeature)
+
+Commit your changes (git commit -m 'Add some AmazingFeature')
+
+Push to the branch (git push origin feature/AmazingFeature)
+
+Open a Pull Request
+
+📄 License
+
+This project is licensed under the MIT License – see the LICENSE file for details.
+
+📞 Support
+
+Email: zezomowafe2@gmail.com
+
+Phone: +20 1102666300

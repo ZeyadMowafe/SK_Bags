@@ -301,13 +301,13 @@ Need help? Get in touch:
 
 - **Email**: zezomowafe2@gmail.com
 - **Phone**: +20 1102666300
-- **Issues**: Create an issue on GitHub
+
 
 ---
 
 <div align="center">
 
-**Made with ❤️ for the handmade community**
+
 
 ⭐ Star this repo if you find it helpful!
 

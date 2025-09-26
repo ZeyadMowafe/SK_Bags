@@ -5,14 +5,17 @@ WORKDIR /app/frontend
 # Copy package.json & lock first
 COPY frontend/package*.json ./
 
-# Install dependencies (include dev so react-scripts is available)
+# Install dependencies
 RUN npm install --include=dev
+
+# Fix permissions for bin scripts
+RUN chmod +x node_modules/.bin/*
 
 # Copy rest of frontend source
 COPY frontend/ ./
 
 # Build React app
-RUN npx react-scripts build
+RUN ./node_modules/.bin/react-scripts build
 
 
 # ---------- Stage 2: Backend ----------

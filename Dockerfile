@@ -15,7 +15,8 @@ RUN chmod +x node_modules/.bin/*
 COPY frontend/ ./
 
 # Build React app
-RUN ./node_modules/.bin/react-scripts build
+RUN npm run build
+
 
 
 # ---------- Stage 2: Backend ----------

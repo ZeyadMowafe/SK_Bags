@@ -2,17 +2,17 @@
 FROM node:18 AS frontend-builder
 WORKDIR /app/frontend
 
-# Copy package.json & lock file first
+# Copy package.json & lock first
 COPY frontend/package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (include dev so react-scripts is available)
+RUN npm install --include=dev
 
 # Copy rest of frontend source
 COPY frontend/ ./
 
 # Build React app
-RUN npm run build
+RUN npx react-scripts build
 
 
 # ---------- Stage 2: Backend ----------
@@ -29,7 +29,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy backend source
 COPY backend ./backend
 
-# Copy built frontend into backend (static files)
+# Copy built frontend into backend static files
 COPY --from=frontend-builder /app/frontend/build ./backend/static
 
 # Expose port

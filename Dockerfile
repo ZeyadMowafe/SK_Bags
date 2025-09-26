@@ -2,17 +2,17 @@
 FROM node:18 AS frontend-builder
 WORKDIR /app/frontend
 
-# Copy package.json & package-lock.json
+# Copy package.json & lock file
 COPY frontend/package*.json ./
 
-# Install all dependencies (including react-scripts)
+# Install dependencies
 RUN npm install
 
-# Copy rest of frontend source
+# Copy the rest of the frontend source
 COPY frontend/ ./
 
-# Build React app
-RUN npx react-scripts build
+# Fix permissions then build
+RUN chmod +x node_modules/.bin/react-scripts && npx react-scripts build
 
 
 # ---------- Stage 2: Backend ----------
@@ -22,7 +22,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
 
-# Copy backend requirements & install
+# Install Python deps
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 

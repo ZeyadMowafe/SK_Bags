@@ -20,10 +20,15 @@ FROM python:3.11-slim AS backend
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps
 COPY backend/requirements.txt ./backend/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # Copy backend source
@@ -32,8 +37,19 @@ COPY backend ./backend
 # Copy built frontend into backend static folder
 COPY --from=frontend-builder /app/frontend/build ./backend/static
 
-# Expose port
-EXPOSE 8000
+# Create uploads directory
+RUN mkdir -p ./backend/uploads
 
-# Start FastAPI
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose port (Railway uses $PORT env variable)
+EXPOSE $PORT
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:$PORT/health || exit 1
+
+# Start FastAPI with dynamic port
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

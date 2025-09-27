@@ -1,13 +1,20 @@
-const API_BASE_URL = 'http://localhost:8000/api';
+// تحديد عنوان API بناءً على البيئة
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://skbags-production.up.railway.app' 
+  : 'http://localhost:8000';
 
 // Token management
 const getToken = () => localStorage.getItem('authToken');
 const setToken = (token) => localStorage.setItem('authToken', token);
 const removeToken = () => localStorage.removeItem('authToken');
 
-// API request helper
+// API request helper محسن
 const apiRequest = async (endpoint, options = {}) => {
   const token = getToken();
+  
+  // إزالة /api من بداية المسار لأن Backend يتعامل معها تلقائياً
+  const cleanEndpoint = endpoint.startsWith('/api') ? endpoint.slice(4) : endpoint;
+  
   const config = {
     headers: {
       'Content-Type': 'application/json',
@@ -17,14 +24,24 @@ const apiRequest = async (endpoint, options = {}) => {
     ...options,
   };
 
+  const fullUrl = `${API_BASE_URL}${cleanEndpoint}`;
+  console.log('Making API request to:', fullUrl);
+
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const response = await fetch(fullUrl, config);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('API Error Response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
     
-    return await response.json();
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    } else {
+      return await response.text();
+    }
   } catch (error) {
     console.error('API request failed:', error);
     throw error;
@@ -43,7 +60,6 @@ const getProduct = async (id) => {
 // Order API
 const createOrder = async (orderData) => {
   console.log('Sending order data:', orderData);
-  console.log('Stringified body:', JSON.stringify(orderData));
   
   return apiRequest('/orders', {
     method: 'POST',
@@ -58,58 +74,29 @@ const getOrders = async () => {
   return apiRequest('/orders');
 };
 
-// الحل الشامل: تجربة مسارات متعددة
 const updateOrderStatus = async (orderId, status) => {
   console.log(`Updating order ${orderId} with status: ${status}`);
   
   const payload = { status: status };
   console.log('Payload:', JSON.stringify(payload));
   
-  // قائمة المسارات المحتملة حسب الأولوية
-  const endpoints = [
-    `/admin/orders/${orderId}/status`,  // المسار الصحيح في الـ Backend
-    `/orders/${orderId}/status`,       // المسار المستخدم في الـ Frontend سابقاً
-    `/admin/orders/${orderId}`,        // بديل محتمل
-    `/orders/${orderId}`               // بديل محتمل
-  ];
-  
-  // تجربة كل مسار حتى ينجح واحد
-  for (const endpoint of endpoints) {
-    try {
-      console.log(`Trying endpoint: ${endpoint}`);
-      const response = await apiRequest(endpoint, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
-      console.log(`Success with endpoint: ${endpoint}`, response);
-      return response;
-    } catch (error) {
-      console.log(`Failed with endpoint ${endpoint}:`, error.message);
-      
-      // إذا كان هذا آخر محاولة، ارمي الخطأ
-      if (endpoint === endpoints[endpoints.length - 1]) {
-        throw new Error(`All update attempts failed. Last error: ${error.message}`);
-      }
-    }
-  }
-};
-
-// الحل الثاني: استخدام PATCH بدلاً من PUT
-const updateOrderStatusPatch = async (orderId, status) => {
-  return apiRequest(`/orders/${orderId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
+  // المسار الصحيح حسب Backend
+  return apiRequest(`/admin/orders/${orderId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
   });
 };
 
 // Auth API
 const login = async (credentials) => {
+  console.log('Attempting login to:', `${API_BASE_URL}/admin/login`);
+  
   // Create FormData to match OAuth2PasswordRequestForm expected by FastAPI
   const formData = new URLSearchParams();
   formData.append('username', credentials.email); // FastAPI OAuth2 expects 'username'
   formData.append('password', credentials.password);
   
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${API_BASE_URL}/admin/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -118,7 +105,9 @@ const login = async (credentials) => {
   });
   
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const errorText = await response.text();
+    console.error('Login error:', errorText);
+    throw new Error(`Login failed: ${response.status}`);
   }
   
   const data = await response.json();
@@ -134,9 +123,8 @@ const logout = () => {
   removeToken();
 };
 
-// Admin API - Updated for images field only
+// Admin API
 const createProduct = async (productData) => {
-  // Clean data - use only images field
   const preparedData = {
     name: productData.name,
     description: productData.description,
@@ -155,7 +143,6 @@ const createProduct = async (productData) => {
 };
 
 const updateProduct = async (id, productData) => {
-  // Clean data - use only images field
   const preparedData = {
     name: productData.name,
     description: productData.description,
@@ -184,7 +171,6 @@ const deleteProduct = async (id) => {
     if (!response.ok) {
       const errorData = await response.json();
       
-      // إذا كان الخطأ بسبب قيود المفتاح الخارجي
       if (errorData.code === '23503' || errorData.message?.includes('foreign key constraint')) {
         throw new Error('Cannot delete product. It is associated with existing orders.');
       }
@@ -199,29 +185,56 @@ const deleteProduct = async (id) => {
   }
 };
 
+// تحسين دالة رفع الملف
 const uploadFile = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
   
   const token = getToken();
-  const response = await fetch(`${API_BASE_URL}/upload-simple`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-    body: formData,
-  });
   
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
+  // جرب مسارين مختلفين للرفع
+  const uploadEndpoints = ['/admin/upload', '/upload-simple'];
   
-  const data = await response.json();
-  // Prefer absolute url if provided, else fallback to relative
-  if (data && data.url && !data.url.startsWith('http')) {
-    data.url = `http://localhost:8000${data.url}`;
+  for (const endpoint of uploadEndpoints) {
+    try {
+      console.log(`Trying to upload file to: ${API_BASE_URL}${endpoint}`);
+      
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Upload successful:', data);
+      
+      return data;
+    } catch (error) {
+      console.error(`Upload failed with endpoint ${endpoint}:`, error);
+      
+      // إذا كان هذا آخر محاولة، ارمي الخطأ
+      if (endpoint === uploadEndpoints[uploadEndpoints.length - 1]) {
+        throw error;
+      }
+    }
   }
-  return data;
+};
+
+// Health check function
+const healthCheck = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/health`);
+    return await response.json();
+  } catch (error) {
+    console.error('Health check failed:', error);
+    return { status: 'error', error: error.message };
+  }
 };
 
 // Export API service
@@ -234,7 +247,6 @@ export const apiService = {
   createOrder,
   getOrders,
   updateOrderStatus,
-  updateOrderStatusPatch, // بديل للتجربة
   
   // Auth
   login,
@@ -250,4 +262,8 @@ export const apiService = {
   getToken,
   setToken,
   removeToken,
+  healthCheck,
+  
+  // Configuration
+  API_BASE_URL,
 };

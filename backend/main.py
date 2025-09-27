@@ -17,6 +17,9 @@ import logging
 import os
 from dotenv import load_dotenv
 
+# Supabase imports
+from supabase import create_client, Client
+
 # تحميل المتغيرات البيئية
 load_dotenv()
 
@@ -25,6 +28,22 @@ ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "ht
 
 # عنوان الباك إند العام لاستخدامه في إنشاء روابط الملفات
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000").rstrip('/')
+
+# إعداد Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+BUCKET_NAME = os.getenv("BUCKET_NAME", "product-images")
+
+# إنشاء عميل Supabase
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        logger = logging.getLogger(__name__)
+        logger.info("Supabase client initialized successfully")
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to initialize Supabase client: {e}")
 
 # استيراد الملفات المحلية
 from auth import (
@@ -71,11 +90,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# إعداد المجلدات
+# إعداد المجلدات (احتياطي في حالة عدم توفر Supabase)
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# تقديم الملفات الثابتة
+# تقديم الملفات الثابتة (احتياطي)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # إعداد اللوقر
@@ -110,6 +129,48 @@ def _make_absolute_media(product: dict) -> dict:
         pass
     return product
 
+# Helper function للتعامل مع Supabase Storage
+async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
+    """رفع ملف إلى Supabase Storage"""
+    try:
+        if not supabase:
+            raise Exception("Supabase client not initialized")
+        
+        # رفع الملف
+        response = supabase.storage.from_(BUCKET_NAME).upload(
+            path=filename,
+            file=file_content,
+            file_options={
+                "content-type": content_type,
+                "upsert": True  # يتيح الكتابة فوق الملف إذا كان موجود
+            }
+        )
+        
+        # التحقق من وجود خطأ
+        if hasattr(response, 'error') and response.error:
+            raise Exception(f"Supabase upload error: {response.error}")
+        
+        # الحصول على الرابط العام
+        public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(filename)
+        return public_url
+        
+    except Exception as e:
+        logger.error(f"Error uploading to Supabase: {e}")
+        raise
+
+async def delete_from_supabase(filename: str) -> bool:
+    """حذف ملف من Supabase Storage"""
+    try:
+        if not supabase:
+            return False
+        
+        response = supabase.storage.from_(BUCKET_NAME).remove([filename])
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error deleting from Supabase: {e}")
+        return False
+
 # ===== Startup Events =====
 @app.on_event("startup")
 async def startup_event():
@@ -117,6 +178,13 @@ async def startup_event():
     try:
         await setup_default_admin()
         logger.info("Application startup completed successfully")
+        
+        # التحقق من إعداد Supabase
+        if supabase:
+            logger.info("Using Supabase Storage for file uploads")
+        else:
+            logger.warning("Supabase not configured - using local storage")
+            
     except Exception as e:
         logger.error(f"Error during startup: {e}")
 
@@ -436,13 +504,37 @@ async def upload_file(
         # إنشاء اسم فريد للملف
         file_extension = file.filename.split('.')[-1]
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        
+        # قراءة محتوى الملف
+        file_content = await file.read()
+        
+        # محاولة رفع الملف إلى Supabase أولاً
+        if supabase:
+            try:
+                public_url = await upload_to_supabase(
+                    file_content, 
+                    unique_filename, 
+                    file.content_type
+                )
+                
+                return {
+                    "success": True,
+                    "filename": unique_filename,
+                    "url": public_url,
+                    "relative_url": f"/storage/{BUCKET_NAME}/{unique_filename}",
+                    "size": len(file_content),
+                    "storage": "supabase"
+                }
+                
+            except Exception as supabase_error:
+                logger.warning(f"Supabase upload failed, falling back to local: {supabase_error}")
+        
+        # Fallback إلى التخزين المحلي
         file_path = UPLOAD_DIR / unique_filename
         
-        # حفظ الملف
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(file_content)
         
-        # إنشاء URL مطلق للملف وضمان توافر مسار نسبي أيضاً للتوافق الخلفي
         file_url = f"{BACKEND_PUBLIC_URL}/uploads/{unique_filename}"
         relative_url = f"/uploads/{unique_filename}"
         
@@ -451,8 +543,10 @@ async def upload_file(
             "filename": unique_filename,
             "url": file_url,
             "relative_url": relative_url,
-            "size": os.path.getsize(file_path)
+            "size": len(file_content),
+            "storage": "local"
         }
+        
     except HTTPException:
         raise
     except Exception as e:

@@ -1,14 +1,12 @@
-from fastapi import FastAPI, HTTPException, Depends, status, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Depends, status, File, UploadFile, Form, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from datetime import timedelta, datetime
 from typing import List, Optional
 from db_service import db_service_instance as db
-from fastapi.responses import JSONResponse, FileResponse
-from pathlib import Path
 
 import os
 import shutil
@@ -23,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # إعداد CORS من env vars
-ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(',') if origin.strip()]
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://skbags-production.up.railway.app").split(',') if origin.strip()]
 
 # عنوان الباك إند العام لاستخدامه في إنشاء روابط الملفات
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000").rstrip('/')
@@ -67,7 +65,7 @@ app.add_middleware(ApiPrefixMiddleware)
 # إعداد CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],  # مؤقتاً للتجربة
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -547,51 +545,42 @@ async def general_exception_handler(request, exc):
         status_code=500,
         content={"success": False, "message": "Internal server error"}
     )
-# Static files for frontend (should be last)
-@app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
-    """Serve frontend files and handle SPA routing"""
+
+# ===== Frontend Serving (Must be LAST) =====
+# Mount frontend build files - هذا MUST be after all API routes
+@app.mount("/static", StaticFiles(directory="backend/static/static"), name="static_files")
+
+# Catch-all for frontend SPA routing - This MUST be the very last route
+@app.get("/{path_name:path}")
+async def catch_all(path_name: str, request: Request):
+    """Serve React app for any non-API routes"""
     
-    # قائمة الـ API paths - أي path يبدأ بأي منها هيتم تجاهله
-    api_paths = [
-        "api", "products", "orders", "admin", "auth", "health", 
-        "search", "categories", "uploads", "upload-simple"
+    # List of API endpoints that should return 404 instead of serving frontend
+    api_endpoints = [
+        "docs", "openapi.json", "redoc", "health",
+        "admin", "auth", "products", "orders", "upload", "upload-simple",
+        "search", "categories", "uploads", "api"
     ]
     
-    # إذا كان المسار API path، ارفع 404
-    if any(full_path.startswith(api_path) for api_path in api_paths):
+    # If this looks like an API call, return 404
+    if any(path_name.startswith(endpoint) for endpoint in api_endpoints):
         raise HTTPException(status_code=404, detail="API endpoint not found")
     
-    # مسار الـ frontend files
-    frontend_dir = Path("backend/static")
+    # Check if it's a static file request
+    frontend_static_dir = Path("backend/static")
+    if path_name and not path_name.startswith("/"):
+        file_path = frontend_static_dir / path_name
+        if file_path.is_file():
+            return FileResponse(file_path)
     
-    # إذا لم يكن المجلد موجود، ارفع خطأ
-    if not frontend_dir.exists():
-        raise HTTPException(status_code=404, detail="Frontend files not found")
+    # For everything else, serve the React app
+    index_file = frontend_static_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file, media_type="text/html")
     
-    # إذا كان المسار فارغ، ارجع index.html
-    if not full_path or full_path == "/":
-        index_path = frontend_dir / "index.html"
-        if index_path.exists():
-            return FileResponse(index_path, media_type="text/html")
-    
-    # جرب تلاقي الملف في الـ frontend directory
-    file_path = frontend_dir / full_path
-    
-    # إذا كان الملف موجود، ارجعه
-    if file_path.is_file():
-        return FileResponse(file_path)
-    
-    # إذا لم يكن الملف موجود، ارجع index.html للـ SPA routing
-    index_path = frontend_dir / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path, media_type="text/html")
-    
-    # إذا مفيش index.html حتى، ارفع 404
-    raise HTTPException(status_code=404, detail="File not found")
-
+    # If no index.html found, return 404
+    raise HTTPException(status_code=404, detail="Frontend not found")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-

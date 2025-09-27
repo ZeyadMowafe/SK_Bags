@@ -8,6 +8,7 @@ from datetime import timedelta, datetime
 from typing import List, Optional
 from db_service import db_service_instance as db
 from fastapi.responses import JSONResponse, FileResponse
+from pathlib import Path
 
 import os
 import shutil
@@ -547,26 +548,48 @@ async def general_exception_handler(request, exc):
         content={"success": False, "message": "Internal server error"}
     )
 # Static files for frontend (should be last)
-@app.get("/{path:path}")
-async def serve_frontend(path: str):
-    """Serve frontend files for any non-API routes"""
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    """Serve frontend files and handle SPA routing"""
+    
+    # قائمة الـ API paths - أي path يبدأ بأي منها هيتم تجاهله
+    api_paths = [
+        "api", "products", "orders", "admin", "auth", "health", 
+        "search", "categories", "uploads", "upload-simple"
+    ]
+    
+    # إذا كان المسار API path، ارفع 404
+    if any(full_path.startswith(api_path) for api_path in api_paths):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+    
+    # مسار الـ frontend files
     frontend_dir = Path("backend/static")
     
-    # إذا كان المسار API route، ارجع 404
-    if path.startswith("api/") or path in ["products", "orders", "admin", "auth", "health", "search", "categories", "uploads"]:
-        raise HTTPException(status_code=404, detail="Not found")
+    # إذا لم يكن المجلد موجود، ارفع خطأ
+    if not frontend_dir.exists():
+        raise HTTPException(status_code=404, detail="Frontend files not found")
     
-    # إذا كان ملف موجود، ارجعه
-    file_path = frontend_dir / path
+    # إذا كان المسار فارغ، ارجع index.html
+    if not full_path or full_path == "/":
+        index_path = frontend_dir / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path, media_type="text/html")
+    
+    # جرب تلاقي الملف في الـ frontend directory
+    file_path = frontend_dir / full_path
+    
+    # إذا كان الملف موجود، ارجعه
     if file_path.is_file():
         return FileResponse(file_path)
     
-    # إذا لم يكن موجود، ارجع index.html (for SPA routing)
+    # إذا لم يكن الملف موجود، ارجع index.html للـ SPA routing
     index_path = frontend_dir / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(index_path, media_type="text/html")
     
-    raise HTTPException(status_code=404, detail="Not found")
+    # إذا مفيش index.html حتى، ارفع 404
+    raise HTTPException(status_code=404, detail="File not found")
+
 
 if __name__ == "__main__":
     import uvicorn

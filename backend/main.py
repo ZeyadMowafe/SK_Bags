@@ -721,14 +721,15 @@ async def manifest():
 async def serve_spa(path_name: str):
     """Serve React app for any non-API routes"""
     
-    # List of API endpoints that should return 404
+    # List of API endpoints that should return 404 (لا تشمل admin لوحده)
     api_paths = [
         "docs", "openapi.json", "redoc", "health", "status",
-        "admin", "auth", "products", "orders", "upload", "upload-simple",
+        "admin/login", "admin/me", "admin/products", "admin/orders", "admin/upload", "admin/dashboard",
+        "auth", "products", "orders", "upload", "upload-simple",
         "search", "categories", "uploads", "api"
     ]
     
-    # If this is an API endpoint, return 404
+    # If this is a specific API endpoint, return 404
     if any(path_name.startswith(api_path) for api_path in api_paths):
         raise HTTPException(status_code=404, detail="API endpoint not found")
     
@@ -739,7 +740,7 @@ async def serve_spa(path_name: str):
         if file_path.is_file():
             return FileResponse(file_path)
     
-    # For everything else (SPA routes), serve index.html
+    # For everything else including /admin (SPA routes), serve index.html
     index_path = frontend_dir / "index.html"
     if index_path.exists():
         return FileResponse(index_path, media_type="text/html")

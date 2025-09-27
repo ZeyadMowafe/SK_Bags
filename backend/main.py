@@ -545,8 +545,29 @@ async def general_exception_handler(request, exc):
         status_code=500,
         content={"success": False, "message": "Internal server error"}
     )
+# Static files for frontend (should be last)
+@app.get("/{path:path}")
+async def serve_frontend(path: str):
+    """Serve frontend files for any non-API routes"""
+    frontend_dir = Path("backend/static")
+    
+    # إذا كان المسار API route، ارجع 404
+    if path.startswith("api/") or path in ["products", "orders", "admin", "auth", "health", "search", "categories", "uploads"]:
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    # إذا كان ملف موجود، ارجعه
+    file_path = frontend_dir / path
+    if file_path.is_file():
+        return FileResponse(file_path)
+    
+    # إذا لم يكن موجود، ارجع index.html (for SPA routing)
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    
+    raise HTTPException(status_code=404, detail="Not found")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-app.mount("/", StaticFiles(directory="backend/static", html=True), name="frontend")
+

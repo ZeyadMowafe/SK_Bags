@@ -529,7 +529,7 @@ async def upload_file(
             raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed types: {allowed_types}")
         
         # التحقق من حجم الملف (الحد الأقصى 5MB)
-        max_size = 5 * 1024 * 1024  # 5MB
+        max_size = 10 * 1024 * 1024  # 5MB
         file_content = await file.read()
         if len(file_content) > max_size:
             raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB")

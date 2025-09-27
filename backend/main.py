@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, File, UploadFile, Form, Request
+from fastapi import FastAPI, HTTPException, Depends, status, File, UploadFile, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # إعداد CORS من env vars
-ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://skbags-production.up.railway.app").split(',') if origin.strip()]
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(',') if origin.strip()]
 
 # عنوان الباك إند العام لاستخدامه في إنشاء روابط الملفات
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000").rstrip('/')
@@ -65,7 +65,7 @@ app.add_middleware(ApiPrefixMiddleware)
 # إعداد CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # مؤقتاً للتجربة
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -547,39 +547,74 @@ async def general_exception_handler(request, exc):
     )
 
 # ===== Frontend Serving (Must be LAST) =====
-# Mount frontend build files - هذا MUST be after all API routes
-@app.mount("/static", StaticFiles(directory="backend/static/static"), name="static_files")
 
-# Catch-all for frontend SPA routing - This MUST be the very last route
+# Mount static files (CSS, JS, images) - بدون decorator
+try:
+    static_dir = Path("backend/static/static")
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory="backend/static/static"), name="static_files")
+        logger.info("Static files mounted successfully")
+    else:
+        logger.warning("Static directory not found - frontend may not work")
+except Exception as e:
+    logger.warning(f"Could not mount static files: {e}")
+
+# Serve individual frontend files
+@app.get("/favicon.ico")
+async def favicon():
+    favicon_path = Path("backend/static/favicon.ico")
+    if favicon_path.exists():
+        return FileResponse(favicon_path)
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
+@app.get("/manifest.json")
+async def manifest():
+    manifest_path = Path("backend/static/manifest.json")
+    if manifest_path.exists():
+        return FileResponse(manifest_path)
+    raise HTTPException(status_code=404, detail="Manifest not found")
+
+# Catch-all for React SPA - This MUST be the very last route
 @app.get("/{path_name:path}")
-async def catch_all(path_name: str, request: Request):
+async def serve_spa(path_name: str):
     """Serve React app for any non-API routes"""
     
-    # List of API endpoints that should return 404 instead of serving frontend
-    api_endpoints = [
+    # List of API endpoints that should return 404
+    api_paths = [
         "docs", "openapi.json", "redoc", "health",
         "admin", "auth", "products", "orders", "upload", "upload-simple",
         "search", "categories", "uploads", "api"
     ]
     
-    # If this looks like an API call, return 404
-    if any(path_name.startswith(endpoint) for endpoint in api_endpoints):
+    # If this is an API endpoint, return 404
+    if any(path_name.startswith(api_path) for api_path in api_paths):
         raise HTTPException(status_code=404, detail="API endpoint not found")
     
-    # Check if it's a static file request
-    frontend_static_dir = Path("backend/static")
-    if path_name and not path_name.startswith("/"):
-        file_path = frontend_static_dir / path_name
+    # Try to serve specific file first
+    frontend_dir = Path("backend/static")
+    if path_name and frontend_dir.exists():
+        file_path = frontend_dir / path_name
         if file_path.is_file():
             return FileResponse(file_path)
     
-    # For everything else, serve the React app
-    index_file = frontend_static_dir / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file, media_type="text/html")
+    # For everything else (SPA routes), serve index.html
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path, media_type="text/html")
     
-    # If no index.html found, return 404
-    raise HTTPException(status_code=404, detail="Frontend not found")
+    # If no frontend files found, return API info
+    return JSONResponse(
+        content={
+            "message": "SK Bags API is running", 
+            "status": "healthy",
+            "endpoints": {
+                "products": "/products",
+                "health": "/health",
+                "docs": "/docs"
+            }
+        },
+        status_code=200
+    )
 
 if __name__ == "__main__":
     import uvicorn

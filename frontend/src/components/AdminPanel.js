@@ -1,4 +1,3 @@
-// v3 - Enhanced to show product names in orders table and modal
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { 
@@ -13,7 +12,9 @@ import {
   ShoppingCart,
   Users,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  AlertCircle,
+  CheckCircle
 } from 'lucide-react';
 
 const AdminPanel = () => {
@@ -27,13 +28,17 @@ const AdminPanel = () => {
     price: '',
     category: '',
     stock_quantity: '',
-    images: [] // Field for multiple images
+    images: []
   });
   
-  const [selectedFiles, setSelectedFiles] = useState([]); // Support multiple files
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [activeTab, setActiveTab] = useState('products');
-  const [selectedOrder, setSelectedOrder] = useState(null); // For order details modal
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  
+  // إضافة حالة للـ debug
+  const [debugInfo, setDebugInfo] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('checking');
 
   useEffect(() => {
     const token = apiService.getToken();
@@ -41,28 +46,52 @@ const AdminPanel = () => {
       setIsLoggedIn(true);
       fetchData();
     }
+    
+    // فحص الاتصال بالـ API
+    checkConnection();
   }, []);
+
+  // دالة فحص الاتصال
+  const checkConnection = async () => {
+    try {
+      setConnectionStatus('checking');
+      const health = await apiService.healthCheck();
+      console.log('Health check result:', health);
+      setConnectionStatus('connected');
+      setDebugInfo(health);
+    } catch (error) {
+      console.error('Connection check failed:', error);
+      setConnectionStatus('error');
+      setDebugInfo({ error: error.message, api_url: apiService.API_BASE_URL });
+    }
+  };
 
   const fetchData = async () => {
     try {
+      console.log('Fetching data from API...');
       const [productsData, ordersData] = await Promise.all([
         apiService.getProducts(),
         apiService.getOrders()
       ]);
+      console.log('Products data:', productsData);
+      console.log('Orders data:', ordersData);
       setProducts(productsData);
       setOrders(ordersData);
     } catch (error) {
       console.error('Error fetching data:', error);
+      alert('فشل في جلب البيانات: ' + error.message);
     }
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
+      console.log('Attempting login with:', loginForm);
       await apiService.login(loginForm);
       setIsLoggedIn(true);
       fetchData();
     } catch (error) {
+      console.error('Login error:', error);
       alert('فشل تسجيل الدخول: ' + error.message);
     }
   };
@@ -74,42 +103,45 @@ const AdminPanel = () => {
     setOrders([]);
   };
 
-  // Handle multiple file selection
   const handleFileSelection = (e) => {
     const files = Array.from(e.target.files);
     setSelectedFiles(files);
+    console.log('Selected files:', files);
   };
 
-  // Upload multiple files
   const handleMultipleFileUpload = async () => {
     if (selectedFiles.length === 0) return;
     
     try {
       setUploadingImages(true);
-      const uploadPromises = selectedFiles.map(file => apiService.uploadFile(file));
-      const uploadResults = await Promise.all(uploadPromises);
+      console.log('Uploading files:', selectedFiles);
       
-      // Extract URLs from upload results
+      const uploadPromises = selectedFiles.map(async (file) => {
+        console.log(`Uploading file: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
+        return apiService.uploadFile(file);
+      });
+      
+      const uploadResults = await Promise.all(uploadPromises);
+      console.log('Upload results:', uploadResults);
+      
       const imageUrls = uploadResults.map(result => result.url);
       
-      // Add new images to existing ones
       setProductForm(prev => ({
         ...prev,
         images: [...prev.images, ...imageUrls]
       }));
       
-      // Clear selected files
       setSelectedFiles([]);
       
       alert(`تم رفع ${imageUrls.length} صورة بنجاح!`);
     } catch (error) {
+      console.error('Upload error:', error);
       alert('فشل رفع الصور: ' + error.message);
     } finally {
       setUploadingImages(false);
     }
   };
 
-  // Remove image from product form
   const removeImage = (indexToRemove) => {
     setProductForm(prev => ({
       ...prev,
@@ -117,7 +149,6 @@ const AdminPanel = () => {
     }));
   };
 
-  // Add image URL manually
   const addImageUrl = () => {
     const url = prompt('أدخل رابط الصورة:');
     if (url && url.trim()) {
@@ -144,6 +175,7 @@ const AdminPanel = () => {
       fetchData();
       alert('تم إنشاء المنتج بنجاح!');
     } catch (error) {
+      console.error('Create product error:', error);
       alert('فشل إنشاء المنتج: ' + error.message);
     }
   };
@@ -156,6 +188,7 @@ const AdminPanel = () => {
       fetchData();
       alert('تم حذف المنتج بنجاح!');
     } catch (error) {
+      console.error('Delete product error:', error);
       alert('فشل حذف المنتج: ' + error.message);
     }
   };
@@ -166,11 +199,11 @@ const AdminPanel = () => {
       fetchData();
       alert('تم تحديث حالة الطلب بنجاح!');
     } catch (error) {
+      console.error('Update order status error:', error);
       alert('فشل تحديث حالة الطلب: ' + error.message);
     }
   };
 
-  // New functions for order details modal
   const viewOrderDetails = (order) => {
     setSelectedOrder(order);
   };
@@ -179,27 +212,21 @@ const AdminPanel = () => {
     setSelectedOrder(null);
   };
 
-  // Helper function to get product by ID from products list
   const getProductById = (productId) => {
     return products.find(p => p.id === productId);
   };
 
-  // Enhanced helper function to get product names from order items
   const getOrderProductNames = (items) => {
     if (!items || items.length === 0) return 'لا توجد منتجات';
     
-    // جمع أسماء المنتجات مع التعامل مع البيانات المختلفة
     const productNames = items.map(item => {
-      // محاولة الحصول على اسم المنتج من مصادر مختلفة
       let productName = item.name || item.product_name || item.product?.name;
       
-      // إذا لم نجد الاسم، جرب البحث في قائمة المنتجات بالـ ID
       if (!productName && item.product_id) {
         const foundProduct = getProductById(item.product_id);
         productName = foundProduct?.name;
       }
       
-      // إذا لم نجد الاسم، جرب استخدام الـ ID كمرجع
       if (!productName && item.id) {
         const foundProduct = getProductById(item.id);
         productName = foundProduct?.name;
@@ -208,7 +235,6 @@ const AdminPanel = () => {
       return productName || `منتج #${item.product_id || item.id || 'غير محدد'}`;
     });
     
-    // إذا كان فيه أكثر من 3 منتجات، اعرض أول 3 + عدد الباقي
     if (productNames.length > 3) {
       return `${productNames.slice(0, 3).join(', ')} + ${productNames.length - 3} أخرى`;
     }
@@ -216,9 +242,7 @@ const AdminPanel = () => {
     return productNames.join(', ');
   };
 
-  // Enhanced helper function to get product details with fallbacks
   const getEnhancedProductDetails = (item) => {
-    // محاولة الحصول على تفاصيل المنتج من مصادر مختلفة
     let productDetails = {
       name: item.name || item.product_name || item.product?.name,
       price: item.price || item.product?.price,
@@ -228,13 +252,12 @@ const AdminPanel = () => {
       images: item.images || item.product?.images
     };
     
-    // إذا لم نجد البيانات، جرب البحث في قائمة المنتجات
     if (!productDetails.name && item.product_id) {
       const foundProduct = getProductById(item.product_id);
       if (foundProduct) {
         productDetails = {
           name: foundProduct.name,
-          price: item.price || foundProduct.price, // أولوية لسعر الطلب
+          price: item.price || foundProduct.price,
           category: foundProduct.category,
           description: foundProduct.description,
           image_url: foundProduct.image_url,
@@ -243,7 +266,6 @@ const AdminPanel = () => {
       }
     }
     
-    // إذا لم نجد البيانات، جرب استخدام الـ ID
     if (!productDetails.name && item.id) {
       const foundProduct = getProductById(item.id);
       if (foundProduct) {
@@ -261,17 +283,51 @@ const AdminPanel = () => {
     return {
       ...productDetails,
       quantity: item.quantity || 1,
-      // التأكد من وجود قيم صحيحة
       name: productDetails.name || `منتج #${item.product_id || item.id || 'غير محدد'}`,
       price: productDetails.price || 0,
       category: productDetails.category || 'غير محدد'
     };
   };
 
+  // Component للـ Debug Panel
+  const DebugPanel = () => (
+    <div className="mb-4 p-4 bg-gray-100 rounded-lg">
+      <div className="flex items-center mb-2">
+        {connectionStatus === 'connected' ? (
+          <CheckCircle className="text-green-500 ml-2" size={20} />
+        ) : connectionStatus === 'error' ? (
+          <AlertCircle className="text-red-500 ml-2" size={20} />
+        ) : (
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 ml-2"></div>
+        )}
+        <span className="font-medium">
+          حالة الاتصال: {connectionStatus === 'connected' ? 'متصل' : connectionStatus === 'error' ? 'خطأ' : 'جاري الفحص...'}
+        </span>
+        <button 
+          onClick={checkConnection}
+          className="mr-4 text-blue-600 hover:text-blue-800 text-sm"
+        >
+          إعادة فحص
+        </button>
+      </div>
+      
+      {debugInfo && (
+        <div className="text-xs text-gray-600">
+          <div>API URL: {apiService.API_BASE_URL}</div>
+          {debugInfo.error && <div className="text-red-600">خطأ: {debugInfo.error}</div>}
+          {debugInfo.environment && <div>البيئة: {debugInfo.environment}</div>}
+          {debugInfo.supabase_configured && <div>Supabase Storage: {debugInfo.supabase_configured ? 'مفعل' : 'غير مفعل'}</div>}
+        </div>
+      )}
+    </div>
+  );
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
+          <DebugPanel />
+          
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-800">تسجيل دخول المدير</h1>
             <p className="text-gray-600">أدخل بيانات الدخول للوصول للوحة التحكم</p>
@@ -336,6 +392,8 @@ const AdminPanel = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        <DebugPanel />
+        
         {/* Tabs */}
         <div className="flex space-x-4 space-x-reverse mb-8">
           <button
@@ -347,7 +405,7 @@ const AdminPanel = () => {
             }`}
           >
             <Package size={16} />
-            <span>المنتجات</span>
+            <span>المنتجات ({products.length})</span>
           </button>
           
           <button
@@ -359,7 +417,7 @@ const AdminPanel = () => {
             }`}
           >
             <ShoppingCart size={16} />
-            <span>الطلبات</span>
+            <span>الطلبات ({orders.length})</span>
           </button>
         </div>
 
@@ -548,7 +606,6 @@ const AdminPanel = () => {
                               const fallback = 'https://via.placeholder.com/40x40?text=No+Image';
                               
                               if (images.length === 0) {
-                                // No images, show placeholder
                                 return (
                                   <img
                                     src={fallback}
@@ -557,7 +614,6 @@ const AdminPanel = () => {
                                   />
                                 );
                               } else if (images.length === 1) {
-                                // Single image
                                 return (
                                   <img
                                     src={images[0]}
@@ -567,7 +623,6 @@ const AdminPanel = () => {
                                   />
                                 );
                               } else {
-                                // Multiple images - show first image with count
                                 return (
                                   <div className="relative">
                                     <img
@@ -616,7 +671,7 @@ const AdminPanel = () => {
           </div>
         )}
 
-        {/* Orders Tab - Enhanced with Product Names */}
+        {/* Orders Tab */}
         {activeTab === 'orders' && (
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b">
@@ -644,8 +699,8 @@ const AdminPanel = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div>
-                          <div className="font-medium">{order.customer_info.name}</div>
-                          <div className="text-gray-400">{order.customer_info.email}</div>
+                          <div className="font-medium">{order.customer_info?.name || 'غير محدد'}</div>
+                          <div className="text-gray-400">{order.customer_info?.email || 'غير محدد'}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
@@ -654,10 +709,10 @@ const AdminPanel = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.items.length} قطعة
+                        {order.items?.length || 0} قطعة
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.total_amount} جنيه
+                        {order.total_amount || 0} جنيه
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
@@ -673,7 +728,7 @@ const AdminPanel = () => {
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(order.created_at).toLocaleDateString('ar-EG')}
+                        {order.created_at ? new Date(order.created_at).toLocaleDateString('ar-EG') : 'غير محدد'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button 
@@ -692,7 +747,7 @@ const AdminPanel = () => {
         )}
       </div>
       
-      {/* Enhanced Order Details Modal */}
+      {/* Order Details Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -714,10 +769,10 @@ const AdminPanel = () => {
                   معلومات العميل
                 </h3>
                 <div className="space-y-2">
-                  <p><span className="font-medium">الاسم:</span> {selectedOrder.customer_info.name}</p>
-                  <p><span className="font-medium">البريد الإلكتروني:</span> {selectedOrder.customer_info.email}</p>
-                  <p><span className="font-medium">الهاتف:</span> {selectedOrder.customer_info.phone}</p>
-                  <p><span className="font-medium">العنوان:</span> {selectedOrder.customer_info.address}</p>
+                  <p><span className="font-medium">الاسم:</span> {selectedOrder.customer_info?.name || 'غير محدد'}</p>
+                  <p><span className="font-medium">البريد الإلكتروني:</span> {selectedOrder.customer_info?.email || 'غير محدد'}</p>
+                  <p><span className="font-medium">الهاتف:</span> {selectedOrder.customer_info?.phone || 'غير محدد'}</p>
+                  <p><span className="font-medium">العنوان:</span> {selectedOrder.customer_info?.address || 'غير محدد'}</p>
                 </div>
               </div>
               
@@ -729,7 +784,7 @@ const AdminPanel = () => {
                 </h3>
                 <div className="space-y-2">
                   <p><span className="font-medium">رقم الطلب:</span> #{selectedOrder.id}</p>
-                  <p><span className="font-medium">تاريخ الطلب:</span> {new Date(selectedOrder.created_at).toLocaleDateString('ar-EG')}</p>
+                  <p><span className="font-medium">تاريخ الطلب:</span> {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleDateString('ar-EG') : 'غير محدد'}</p>
                   <p><span className="font-medium">الحالة:</span> 
                     <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
                       selectedOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
@@ -744,18 +799,17 @@ const AdminPanel = () => {
                        selectedOrder.status === 'delivered' ? 'تم التسليم' : 'ملغي'}
                     </span>
                   </p>
-                  <p><span className="font-medium">المبلغ الإجمالي:</span> {selectedOrder.total_amount} جنيه</p>
-                  <p><span className="font-medium">عدد المنتجات:</span> {selectedOrder.items.length}</p>
+                  <p><span className="font-medium">المبلغ الإجمالي:</span> {selectedOrder.total_amount || 0} جنيه</p>
+                  <p><span className="font-medium">عدد المنتجات:</span> {selectedOrder.items?.length || 0}</p>
                 </div>
               </div>
             </div>
             
-            {/* Enhanced Order Items with Better Product Display */}
+            {/* Order Items */}
             <div className="mt-6">
               <h3 className="text-lg font-semibold mb-4">المنتجات المطلوبة</h3>
               <div className="space-y-4">
-                {selectedOrder.items.map((item, index) => {
-                  // استخدام الدالة المحسنة للحصول على تفاصيل المنتج
+                {selectedOrder.items?.map((item, index) => {
                   const productDetails = getEnhancedProductDetails(item);
                   
                   return (
@@ -764,7 +818,6 @@ const AdminPanel = () => {
                         {/* Product Image */}
                         <div className="flex-shrink-0">
                           {(() => {
-                            // الحصول على الصورة من التفاصيل المحسنة
                             let imageSrc = 'https://via.placeholder.com/64x64?text=No+Image';
                             
                             if (productDetails.image_url) {
@@ -786,7 +839,7 @@ const AdminPanel = () => {
                           })()}
                         </div>
                         
-                        {/* Enhanced Product Details */}
+                        {/* Product Details */}
                         <div className="flex-grow">
                           <div className="flex justify-between items-start">
                             <div>
@@ -837,7 +890,9 @@ const AdminPanel = () => {
                       </div>
                     </div>
                   );
-                })}
+                }) || (
+                  <div className="text-center py-4 text-gray-500">لا توجد منتجات في هذا الطلب</div>
+                )}
               </div>
               
               {/* Order Summary */}
@@ -845,11 +900,11 @@ const AdminPanel = () => {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center text-lg">
                     <span className="font-semibold text-gray-700">إجمالي الطلب:</span>
-                    <span className="font-bold text-2xl text-blue-600">{selectedOrder.total_amount} جنيه</span>
+                    <span className="font-bold text-2xl text-blue-600">{selectedOrder.total_amount || 0} جنيه</span>
                   </div>
                   <div className="flex justify-between items-center text-sm text-gray-600 mt-2">
-                    <span>عدد المنتجات: {selectedOrder.items.length}</span>
-                    <span>إجمالي القطع: {selectedOrder.items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                    <span>عدد المنتجات: {selectedOrder.items?.length || 0}</span>
+                    <span>إجمالي القطع: {selectedOrder.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0}</span>
                   </div>
                 </div>
               </div>

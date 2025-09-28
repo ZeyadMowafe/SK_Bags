@@ -173,7 +173,7 @@ async def ensure_storage_bucket():
         return False
 # دالة محسنة لرفع الملفات إلى Supabase
 async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
-    """دالة رفع محسنة مع تشخيص أفضل للأخطاء"""
+    """دالة رفع مُصححة نهائياً"""
     try:
         if not supabase_storage:
             raise Exception("Supabase Storage not initialized")
@@ -184,7 +184,7 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
         logger.info(f"File size: {len(file_content)} bytes")
         logger.info(f"Bucket: {BUCKET_NAME}")
         
-        # التحقق من وجود الـ bucket أولاً
+        # التحقق من وجود الـ bucket
         try:
             buckets = supabase_storage.storage.list_buckets()
             bucket_exists = False
@@ -202,69 +202,60 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
             logger.error(f"Bucket check failed: {bucket_error}")
             raise Exception(f"Bucket check failed: {bucket_error}")
         
-        # محاولة الرفع
+        # محاولة الرفع - الطريقة المُصححة
         logger.info("Attempting upload...")
+        
         try:
-            # الطريقة الأولى: رفع بسيط
+            # استخدام io.BytesIO بدلاً من bytes مباشرة
+            import io
+            file_buffer = io.BytesIO(file_content)
+            
             response = supabase_storage.storage.from_(BUCKET_NAME).upload(
                 path=filename,
-                file=file_content
+                file=file_buffer,
+                file_options={"content-type": content_type}
             )
-            logger.info(f"Upload response: {response}")
+            logger.info("Upload method with BytesIO successful")
             
         except Exception as e1:
-            logger.warning(f"Upload method 1 failed: {e1}")
+            logger.warning(f"BytesIO method failed: {e1}")
             
-            # الطريقة الثانية: رفع مع upsert
             try:
+                # المحاولة الثانية: مع upsert
+                file_buffer = io.BytesIO(file_content)
                 response = supabase_storage.storage.from_(BUCKET_NAME).upload(
                     path=filename,
-                    file=file_content,
-                    file_options={"upsert": True}
+                    file=file_buffer,
+                    file_options={"content-type": content_type, "upsert": True}
                 )
-                logger.info(f"Upload method 2 response: {response}")
+                logger.info("Upload method with upsert successful")
                 
             except Exception as e2:
-                logger.error(f"Upload method 2 also failed: {e2}")
-                # الطريقة الثالثة: محاولة مع content-type محدد
+                logger.warning(f"BytesIO + upsert failed: {e2}")
+                
                 try:
+                    # المحاولة الثالثة: تمرير البيانات مباشرة
                     response = supabase_storage.storage.from_(BUCKET_NAME).upload(
-                        path=filename,
-                        file=file_content,
-                        file_options={
-                            "content-type": content_type,
-                            "upsert": True
-                        }
+                        filename, 
+                        file_content
                     )
-                    logger.info(f"Upload method 3 response: {response}")
+                    logger.info("Direct upload successful")
+                    
                 except Exception as e3:
                     logger.error(f"All upload methods failed: {e1}, {e2}, {e3}")
-                    raise Exception(f"All upload methods failed. Last error: {e3}")
+                    raise Exception(f"Upload failed: {str(e3)}")
         
         # إنشاء الرابط العام
         public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{filename}"
         logger.info(f"Generated public URL: {public_url}")
-        
-        # اختبار الرابط (اختياري)
-        try:
-            import httpx
-            async with httpx.AsyncClient() as client:
-                test_response = await client.head(public_url, timeout=5.0)
-                if test_response.status_code == 200:
-                    logger.info("File URL is accessible")
-                else:
-                    logger.warning(f"File URL returned status: {test_response.status_code}")
-        except Exception as url_test_error:
-            logger.warning(f"Could not test URL: {url_test_error}")
-        
         logger.info("=== Supabase Upload Success ===")
+        
         return public_url
         
     except Exception as e:
         logger.error(f"=== Supabase Upload Failed ===")
         logger.error(f"Error: {str(e)}")
         raise Exception(f"Supabase upload error: {str(e)}")
-
 
 
 
@@ -281,6 +272,64 @@ async def delete_from_supabase(filename: str) -> bool:
         logger.error(f"Error deleting from Supabase: {e}")
         return False
 
+
+@app.post("/admin/upload-test")
+async def upload_test(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_active_user)
+):
+    """اختبار رفع مبسط للتشخيص"""
+    try:
+        logger.info(f"=== Test Upload Start ===")
+        
+        # قراءة الملف
+        file_content = await file.read()
+        file_size = len(file_content)
+        
+        # اسم الملف
+        unique_filename = f"test-{uuid.uuid4()}.{file.filename.split('.')[-1]}"
+        
+        logger.info(f"Test filename: {unique_filename}")
+        logger.info(f"File size: {file_size}")
+        
+        if not supabase_storage:
+            return {"error": "Supabase storage not initialized"}
+        
+        # محاولة مبسطة جداً
+        try:
+            import io
+            file_buffer = io.BytesIO(file_content)
+            
+            # أبسط طريقة ممكنة
+            result = supabase_storage.storage.from_(BUCKET_NAME).upload(
+                unique_filename,
+                file_buffer
+            )
+            
+            logger.info(f"Upload result: {result}")
+            logger.info(f"Upload result type: {type(result)}")
+            
+            public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
+            
+            return {
+                "success": True,
+                "filename": unique_filename,
+                "url": public_url,
+                "upload_result": str(result),
+                "result_type": str(type(result))
+            }
+            
+        except Exception as upload_error:
+            logger.error(f"Upload error: {upload_error}")
+            logger.error(f"Upload error type: {type(upload_error)}")
+            return {
+                "error": str(upload_error),
+                "error_type": str(type(upload_error))
+            }
+        
+    except Exception as e:
+        logger.error(f"Test upload error: {e}")
+        return {"error": str(e)}
 # ===== Startup Events =====
 @app.on_event("startup")
 async def startup_event():

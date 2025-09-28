@@ -1,20 +1,25 @@
+
+
+
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn, RotateCcw } from 'lucide-react';
 
 const ProductModal = ({ product, onClose, onAddToCart }) => {
-  // جمع كل الصور المتاحة (image_url + images array) - الطريقة الأصلية
+  // جمع كل الصور المتاحة (image_url + images array)
   const getAllImages = () => {
     const images = [];
     
     // إضافة image_url إذا كانت موجودة
-    if (product?.image_url) {
+    if (product.image_url) {
       images.push(product.image_url);
     }
     
     // إضافة باقي الصور من images array
-    if (Array.isArray(product?.images)) {
+    if (Array.isArray(product.images)) {
       product.images.forEach(img => {
-        if (img && img !== product?.image_url) { // تجنب التكرار
+        if (img && img !== product.image_url) { // تجنب التكرار
           images.push(img);
         }
       });
@@ -37,32 +42,10 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   
   const images = getAllImages();
   const containerRef = useRef(null);
   const autoPlayRef = useRef(null);
-
-  // تحديد إذا كان الجهاز موبايل
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // منع السكرول في الخلفية عند فتح المودال
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-    return () => {
-      document.body.style.overflow = 'unset';
-      document.body.style.touchAction = 'auto';
-    };
-  }, []);
 
   // Auto-play functionality
   useEffect(() => {
@@ -191,7 +174,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
     if (!isDragging || images.length <= 1) return;
     
     e.preventDefault();
-    const threshold = isMobile ? 50 : 80; // تقليل المسافة المطلوبة للموبايل
+    const threshold = 80; // تقليل المسافة المطلوبة للتنقل
     
     if (Math.abs(dragOffset) > threshold) {
       if (dragOffset > 0) {
@@ -206,35 +189,13 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
   };
 
   const handleImageError = (e) => {
-    console.warn('Image failed to load:', e.currentTarget.src);
-    e.currentTarget.src = 'https://via.placeholder.com/800x600?text=Image+Not+Found';
+    e.currentTarget.src = 'https://via.placeholder.com/800x600?text=No+Image';
     setImageLoaded(true);
   };
 
   const handleImageLoad = () => {
     setImageLoaded(true);
   };
-
-  // Demo product للتجربة
-  const demoProduct = {
-    name: "Premium Wireless Headphones",
-    description: "High-quality wireless headphones with noise cancellation technology and superior sound quality for an immersive audio experience. These headphones feature advanced drivers and comfortable padding for extended use.",
-    price: "1,999",
-    stock_quantity: 15,
-    category: "Electronics",
-    image_url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=600&fit=crop",
-    images: [
-      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1484704849700-f032a568e944?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1583394838336-acd977736f90?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=800&h=600&fit=crop",
-      "https://images.unsplash.com/photo-1528148343865-51218c4a13e6?w=800&h=600&fit=crop"
-    ]
-  };
-
-  const currentProduct = product || demoProduct;
-
-  if (!currentProduct) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in-advanced">
@@ -253,7 +214,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
-              style={{ touchAction: isMobile ? 'pan-y pinch-zoom' : 'none' }}
+              style={{ touchAction: 'pan-y pinch-zoom' }}
             >
               {/* Loading Skeleton */}
               {!imageLoaded && (
@@ -272,19 +233,13 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
               >
                 <img 
                   src={images[currentImageIndex]} 
-                  alt={`${currentProduct.name} - Image ${currentImageIndex + 1}`}
+                  alt={`${product.name} - Image ${currentImageIndex + 1}`}
                   onError={handleImageError}
                   onLoad={handleImageLoad}
                   className={`w-full h-full object-cover transition-all duration-500 ${
                     isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'
                   }`}
-                  onClick={() => !isMobile && setIsZoomed(!isZoomed)}
-                  draggable={false}
-                  style={{
-                    imageRendering: 'high-quality',
-                    backfaceVisibility: 'hidden',
-                    transform: 'translateZ(0)'
-                  }}
+                  onClick={() => setIsZoomed(!isZoomed)}
                 />
                 
                 {/* Image Reflection Effect */}
@@ -292,7 +247,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
               </div>
               
               {/* Navigation Arrows with Advanced Styling */}
-              {images.length > 1 && !isMobile && (
+              {images.length > 1 && (
                 <>
                   <button
                     onClick={prevImage}
@@ -314,29 +269,27 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
 
               {/* Controls Panel */}
               <div className="absolute top-4 right-4 flex space-x-2 z-20">
-                {images.length > 1 && !isMobile && (
+                {images.length > 1 && (
                   <button
                     onClick={() => setAutoPlay(!autoPlay)}
                     className={`control-btn ${autoPlay ? 'active' : ''}`}
                     title={autoPlay ? 'Pause slideshow' : 'Start slideshow'}
                   >
-                    <RotateCcw size={18} />
+                    {autoPlay ? <RotateCcw size={18} /> : <RotateCcw size={18} />}
                   </button>
                 )}
                 
-                {!isMobile && (
-                  <button
-                    onClick={() => setIsZoomed(!isZoomed)}
-                    className="control-btn"
-                    title={isZoomed ? 'Zoom out' : 'Zoom in'}
-                  >
-                    <ZoomIn size={18} />
-                  </button>
-                )}
+                <button
+                  onClick={() => setIsZoomed(!isZoomed)}
+                  className="control-btn"
+                  title={isZoomed ? 'Zoom out' : 'Zoom in'}
+                >
+                  <ZoomIn size={18} />
+                </button>
               </div>
               
               {/* Progress Bar for Auto-play */}
-              {autoPlay && !isMobile && (
+              {autoPlay && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
                   <div className="h-full bg-blue-500 animate-progress-bar"></div>
                 </div>
@@ -353,7 +306,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
             {/* Enhanced Thumbnail Navigation */}
             {images.length > 1 && (
               <div className="absolute bottom-20 left-4 right-4 z-10">
-                <div className="flex space-x-3 overflow-x-auto pb-2 px-2 hide-scrollbar">
+                <div className="flex space-x-3 overflow-x-auto pb-2 px-2">
                   {images.map((img, index) => (
                     <button
                       key={index}
@@ -366,11 +319,8 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                       <img
                         src={img}
                         alt={`Thumbnail ${index + 1}`}
-                        onError={(e) => {
-                          e.currentTarget.src = 'https://via.placeholder.com/80x80?text=' + (index + 1);
-                        }}
+                        onError={handleImageError}
                         className="w-full h-full object-cover"
-                        draggable={false}
                       />
                       <div className="thumbnail-overlay"></div>
                     </button>
@@ -378,6 +328,8 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                 </div>
               </div>
             )}
+
+           
           </div>
 
           {/* Enhanced Product Details Section */}
@@ -386,13 +338,13 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
             <div className="animate-slide-in-right">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-3 leading-tight">{currentProduct.name}</h2>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-3 leading-tight">{product.name}</h2>
                   <span className="inline-block text-sm text-blue-600 uppercase tracking-wider bg-blue-50 px-4 py-2 rounded-full font-semibold border border-blue-100">
-                    {currentProduct.category}
+                    {product.category}
                   </span>
                 </div>
                 <button 
-                  onClick={onClose || (() => console.log('Modal closed'))} 
+                  onClick={onClose} 
                   className="close-btn"
                 >
                   <X size={24} />
@@ -406,7 +358,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                 Product Details
                 <div className="ml-2 w-12 h-px bg-gradient-to-r from-blue-500 to-transparent"></div>
               </h3>
-              <p className="text-gray-700 leading-relaxed text-base">{currentProduct.description}</p>
+              <p className="text-gray-700 leading-relaxed text-base">{product.description}</p>
             </div>
             
             {/* Enhanced Price and Stock */}
@@ -414,22 +366,22 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
               <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-4xl font-bold text-black">
-                    EGP {currentProduct.price}
+                    EGP {product.price}
                   </span>
                   <div className="text-right">
                     <div className="text-sm text-gray-600 mb-1">Stock Available</div>
-                    <span className="text-lg font-bold text-black">{currentProduct.stock_quantity}</span>
+                    <span className="text-lg font-bold text-black">{product.stock_quantity}</span>
                   </div>
                 </div>
                 
-                {currentProduct.stock_quantity <= 5 && currentProduct.stock_quantity > 0 && (
+                {product.stock_quantity <= 5 && product.stock_quantity > 0 && (
                   <div className="flex items-center text-orange-600 text-sm font-medium bg-orange-50 px-3 py-2 rounded-lg">
                     <div className="w-2 h-2 bg-orange-500 rounded-full mr-2 animate-pulse"></div>
                     Limited stock remaining
                   </div>
                 )}
                 
-                {currentProduct.stock_quantity === 0 && (
+                {product.stock_quantity === 0 && (
                   <div className="flex items-center text-red-600 text-sm font-medium bg-red-50 px-3 py-2 rounded-lg">
                     <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
                     Out of stock
@@ -441,15 +393,15 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
             {/* Enhanced Action Buttons */}
             <div className="space-y-4 animate-slide-in-right animation-delay-3">
               <button
-                onClick={() => onAddToCart?.(currentProduct) || console.log('Added to cart:', currentProduct.name)}
-                disabled={currentProduct.stock_quantity === 0}
+                onClick={() => onAddToCart(product)}
+                disabled={product.stock_quantity === 0}
                 className="premium-btn primary"
               >
-                {currentProduct.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+                {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
               </button>
               
               <button
-                onClick={onClose || (() => console.log('Continue shopping'))}
+                onClick={onClose}
                 className="premium-btn secondary"
               >
                 Continue Shopping
@@ -627,15 +579,6 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           transform-origin: center;
         }
 
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-
         /* Enhanced Mobile Touch Support */
         .touch-pan-y {
           -webkit-overflow-scrolling: touch;
@@ -649,18 +592,6 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           
           .image-container-3d {
             touch-action: manipulation;
-          }
-
-          /* Mobile specific optimizations */
-          .h-64 { height: 50vh; }
-          
-          .p-8 { padding: 1rem; }
-          
-          .text-3xl { font-size: 1.5rem; }
-          
-          .thumbnail {
-            width: 50px !important;
-            height: 50px !important;
           }
         }
 
@@ -739,7 +670,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
         .thumbnail-active {
           ring: 3px;
           ring-color: rgba(59, 130, 246, 0.8);
-          box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+          shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
           transform: scale(1.15);
         }
 
@@ -858,61 +789,6 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
         
         .overflow-x-auto::-webkit-scrollbar-thumb:hover {
           background: rgba(59, 130, 246, 0.8);
-        }
-
-        /* Additional Mobile Optimizations */
-        @media (max-width: 768px) {
-          .animate-slide-up-advanced {
-            animation-duration: 0.4s;
-          }
-          
-          .slide-left-3d, .slide-right-3d,
-          .slide-in-left-3d, .slide-in-right-3d,
-          .fade-scale-out, .fade-scale-in {
-            animation-duration: 0.3s;
-          }
-          
-          .premium-btn {
-            font-size: 14px;
-            padding: 14px 20px;
-          }
-          
-          .text-4xl {
-            font-size: 2rem;
-          }
-          
-          .mb-8 {
-            margin-bottom: 1.5rem;
-          }
-          
-          .mb-6 {
-            margin-bottom: 1rem;
-          }
-        }
-
-        /* Performance Optimizations */
-        .image-container-3d,
-        .image-container-3d img {
-          will-change: transform;
-          backface-visibility: hidden;
-          transform: translateZ(0);
-        }
-
-        /* Touch improvements */
-        * {
-          -webkit-tap-highlight-color: transparent;
-          -webkit-touch-callout: none;
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          -ms-user-select: none;
-          user-select: none;
-        }
-
-        input, textarea, button {
-          -webkit-user-select: auto;
-          -moz-user-select: auto;
-          -ms-user-select: auto;
-          user-select: auto;
         }
       `}</style>
     </div>

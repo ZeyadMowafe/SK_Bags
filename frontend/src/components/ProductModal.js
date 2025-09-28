@@ -231,10 +231,15 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                   alt={`${product.name} - Image ${currentImageIndex + 1}`}
                   onError={handleImageError}
                   onLoad={handleImageLoad}
-                  className={`w-full h-full object-cover transition-all duration-500 ${
+                  className={`max-w-full max-h-full w-auto h-auto object-contain transition-all duration-500 ${
                     isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'
                   }`}
                   onClick={() => setIsZoomed(!isZoomed)}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain'
+                  }}
                 />
                 
                 {/* Image Reflection Effect */}
@@ -557,6 +562,17 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           left: 0;
           perspective: 1000px;
           transform-style: preserve-3d;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .image-container-3d img {
+          max-width: 100%;
+          max-height: 100%;
+          width: auto;
+          height: auto;
+          object-fit: contain;
         }
         
         .slide-left-3d { animation: slideLeft3D 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
@@ -855,8 +871,26 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           }
         }
 
-        /* Desktop Responsive Adjustments */
+        /* Desktop Image Container Fixes */
         @media (min-width: 1025px) {
+          .image-container-3d {
+            min-height: 400px;
+          }
+
+          .image-container-3d img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+          }
+
+          /* Full screen mode for desktop */
+          .lg\\:h-full {
+            height: 100vh;
+            max-height: 80vh;
+          }
+          
           .nav-arrow { 
             padding: 12px;
           }
@@ -889,6 +923,23 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
             font-size: 16px;
             border-radius: 12px;
           }
+        }
+
+        /* Image aspect ratio fixes */
+        .image-container-3d {
+          aspect-ratio: auto;
+        }
+
+        /* Prevent image distortion */
+        .image-container-3d img {
+          image-rendering: auto;
+          image-rendering: crisp-edges;
+          image-rendering: -webkit-optimize-contrast;
+        }
+
+        /* Better image loading */
+        .image-container-3d img[src=""] {
+          display: none;
         }
 
         /* Touch Device Optimizations */

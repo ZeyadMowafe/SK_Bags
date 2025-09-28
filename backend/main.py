@@ -173,20 +173,45 @@ async def ensure_storage_bucket():
         return False
 # دالة محسنة لرفع الملفات إلى Supabase
 async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
-    """دالة رفع مضمونة تجرب طرق متعددة"""
+    """دالة رفع محسنة مع تشخيص أفضل للأخطاء"""
     try:
         if not supabase_storage:
             raise Exception("Supabase Storage not initialized")
         
-        logger.info(f"Uploading: {filename}")
+        logger.info(f"=== Supabase Upload Start ===")
+        logger.info(f"Filename: {filename}")
+        logger.info(f"Content-Type: {content_type}")
+        logger.info(f"File size: {len(file_content)} bytes")
+        logger.info(f"Bucket: {BUCKET_NAME}")
         
-        # الطريقة الأولى: رفع بسيط
+        # التحقق من وجود الـ bucket أولاً
         try:
+            buckets = supabase_storage.storage.list_buckets()
+            bucket_exists = False
+            for bucket in buckets:
+                bucket_id = getattr(bucket, 'id', getattr(bucket, 'name', None))
+                if bucket_id == BUCKET_NAME:
+                    bucket_exists = True
+                    logger.info(f"Bucket {BUCKET_NAME} found")
+                    break
+            
+            if not bucket_exists:
+                raise Exception(f"Bucket '{BUCKET_NAME}' does not exist")
+                
+        except Exception as bucket_error:
+            logger.error(f"Bucket check failed: {bucket_error}")
+            raise Exception(f"Bucket check failed: {bucket_error}")
+        
+        # محاولة الرفع
+        logger.info("Attempting upload...")
+        try:
+            # الطريقة الأولى: رفع بسيط
             response = supabase_storage.storage.from_(BUCKET_NAME).upload(
                 path=filename,
                 file=file_content
             )
-            logger.info("Upload method 1 successful")
+            logger.info(f"Upload response: {response}")
+            
         except Exception as e1:
             logger.warning(f"Upload method 1 failed: {e1}")
             
@@ -197,20 +222,50 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
                     file=file_content,
                     file_options={"upsert": True}
                 )
-                logger.info("Upload method 2 successful")
+                logger.info(f"Upload method 2 response: {response}")
+                
             except Exception as e2:
-                logger.error(f"Upload method 2 failed: {e2}")
-                raise Exception(f"Both upload methods failed: {e1}, {e2}")
+                logger.error(f"Upload method 2 also failed: {e2}")
+                # الطريقة الثالثة: محاولة مع content-type محدد
+                try:
+                    response = supabase_storage.storage.from_(BUCKET_NAME).upload(
+                        path=filename,
+                        file=file_content,
+                        file_options={
+                            "content-type": content_type,
+                            "upsert": True
+                        }
+                    )
+                    logger.info(f"Upload method 3 response: {response}")
+                except Exception as e3:
+                    logger.error(f"All upload methods failed: {e1}, {e2}, {e3}")
+                    raise Exception(f"All upload methods failed. Last error: {e3}")
         
         # إنشاء الرابط العام
         public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{filename}"
-        logger.info(f"Generated URL: {public_url}")
+        logger.info(f"Generated public URL: {public_url}")
         
+        # اختبار الرابط (اختياري)
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                test_response = await client.head(public_url, timeout=5.0)
+                if test_response.status_code == 200:
+                    logger.info("File URL is accessible")
+                else:
+                    logger.warning(f"File URL returned status: {test_response.status_code}")
+        except Exception as url_test_error:
+            logger.warning(f"Could not test URL: {url_test_error}")
+        
+        logger.info("=== Supabase Upload Success ===")
         return public_url
         
     except Exception as e:
-        logger.error(f"Upload completely failed: {e}")
-        raise Exception(f"Upload error: {str(e)}")
+        logger.error(f"=== Supabase Upload Failed ===")
+        logger.error(f"Error: {str(e)}")
+        raise Exception(f"Supabase upload error: {str(e)}")
+
+
 
 
 async def delete_from_supabase(filename: str) -> bool:
@@ -563,13 +618,11 @@ async def upload_file(
     file: UploadFile = File(...),
     current_user=Depends(get_current_active_user)
 ):
-    """رفع ملف مع معالجة شاملة للأخطاء"""
+    """رفع ملف مع تشخيص أفضل للأخطاء"""
     try:
-        logger.info(f"=== Starting upload: {file.filename} ===")
-        logger.info(f"Content type: {file.content_type}")
-        logger.info(f"Supabase URL: {SUPABASE_URL}")
-        logger.info(f"Bucket: {BUCKET_NAME}")
-        logger.info(f"Storage client: {supabase_storage is not None}")
+        logger.info(f"=== Starting file upload ===")
+        logger.info(f"Filename: {file.filename}")
+        logger.info(f"Content-Type: {file.content_type}")
         
         # فحص نوع الملف
         allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg']
@@ -603,12 +656,13 @@ async def upload_file(
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
         logger.info(f"Generated filename: {unique_filename}")
         
-        # محاولة الرفع
+        # محاولة الرفع على Supabase
         if supabase_storage:
             try:
+                logger.info("Attempting Supabase upload...")
                 public_url = await upload_to_supabase(file_content, unique_filename, file.content_type)
                 
-                logger.info("=== Upload SUCCESS ===")
+                logger.info("=== Upload SUCCESS (Supabase) ===")
                 return {
                     "success": True,
                     "filename": unique_filename,
@@ -619,48 +673,79 @@ async def upload_file(
                 }
                 
             except Exception as supabase_error:
-                logger.error(f"Supabase upload failed: {supabase_error}")
+                logger.error(f"=== Supabase upload failed ===")
+                logger.error(f"Error details: {supabase_error}")
                 
-                # في الإنتاج، نحاول التخزين المحلي كـ backup
-                if os.getenv("ENVIRONMENT") == "production":
-                    # حفظ محلي كـ backup
-                    try:
-                        file_path = UPLOAD_DIR / unique_filename
-                        with open(file_path, "wb") as buffer:
-                            buffer.write(file_content)
-                        
-                        local_url = f"{BACKEND_PUBLIC_URL}/uploads/{unique_filename}"
-                        logger.info("Fallback to local storage successful")
-                        
-                        return {
-                            "success": True,
-                            "filename": unique_filename,
-                            "url": local_url,
-                            "size": file_size,
-                            "storage": "local_backup",
-                            "content_type": file.content_type,
-                            "note": "تم الحفظ محلياً بسبب مشكلة في Supabase"
-                        }
-                    except Exception as local_error:
-                        logger.error(f"Local backup also failed: {local_error}")
-                
+                # في حالة الفشل، إما نرجع خطأ أو نحفظ محلياً
+                # دعنا نرجع الخطأ بدلاً من الحفظ المحلي لنعرف السبب
                 raise HTTPException(
                     status_code=500,
-                    detail=f"فشل رفع الملف: {str(supabase_error)}"
+                    detail=f"فشل الرفع على Supabase: {str(supabase_error)}"
                 )
         else:
             raise HTTPException(
                 status_code=500,
-                detail="خدمة التخزين غير متاحة - تحقق من إعدادات Supabase"
+                detail="خدمة Supabase Storage غير متاحة"
             )
             
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error in upload: {e}")
         raise HTTPException(status_code=500, detail=f"خطأ غير متوقع: {str(e)}")
 
 
+# دالة اختبار محسنة أيضاً
+@app.get("/admin/debug-storage")
+async def debug_storage(current_user=Depends(get_current_active_user)):
+    """تشخيص مفصل لـ Storage"""
+    try:
+        result = {
+            "supabase_url": SUPABASE_URL,
+            "bucket_name": BUCKET_NAME,
+            "service_role_key_present": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
+            "supabase_key_present": bool(os.getenv("SUPABASE_KEY")),
+            "storage_client_initialized": supabase_storage is not None,
+        }
+        
+        if supabase_storage:
+            try:
+                # جلب معلومات الـ buckets
+                buckets = supabase_storage.storage.list_buckets()
+                result["buckets_list"] = []
+                
+                for bucket in buckets:
+                    bucket_info = {
+                        "id": getattr(bucket, 'id', None),
+                        "name": getattr(bucket, 'name', None), 
+                        "public": getattr(bucket, 'public', None),
+                        "created_at": str(getattr(bucket, 'created_at', None))
+                    }
+                    result["buckets_list"].append(bucket_info)
+                    
+                # فحص الـ bucket المطلوب
+                target_bucket = next((b for b in result["buckets_list"] 
+                                    if b.get('id') == BUCKET_NAME or b.get('name') == BUCKET_NAME), None)
+                
+                result["target_bucket_found"] = target_bucket is not None
+                result["target_bucket_details"] = target_bucket
+                
+                if target_bucket:
+                    # محاولة جلب الملفات الموجودة
+                    try:
+                        files = supabase_storage.storage.from_(BUCKET_NAME).list()
+                        result["files_in_bucket"] = len(files) if files else 0
+                        result["sample_files"] = files[:5] if files else []
+                    except Exception as files_error:
+                        result["files_error"] = str(files_error)
+                
+            except Exception as buckets_error:
+                result["buckets_error"] = str(buckets_error)
+        
+        return result
+        
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/admin/test-storage")
 async def test_storage(current_user=Depends(get_current_active_user)):

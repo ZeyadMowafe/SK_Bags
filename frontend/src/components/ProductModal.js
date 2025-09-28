@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn, RotateCcw } from 'lucide-react';
 
@@ -195,7 +193,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in-advanced">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 animate-fade-in-advanced">
       <div className="bg-white w-full max-w-7xl max-h-[95vh] overflow-hidden shadow-3xl animate-slide-up-advanced rounded-2xl">
         <div className="flex flex-col lg:flex-row h-full">
           {/* Image Gallery Section */}
@@ -203,7 +201,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
             {/* Image Container */}
             <div 
               ref={containerRef}
-              className="relative h-64 lg:h-full cursor-grab active:cursor-grabbing touch-pan-y"
+              className="relative h-64 sm:h-80 md:h-96 lg:h-full cursor-grab active:cursor-grabbing touch-pan-y"
               onMouseDown={handleTouchStart}
               onMouseMove={handleTouchMove}
               onMouseUp={handleTouchEnd}
@@ -251,7 +249,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                     disabled={isAnimating}
                     className={`nav-arrow nav-arrow-left ${isAnimating ? 'disabled' : ''}`}
                   >
-                    <ChevronLeft size={24} />
+                    <ChevronLeft size={20} className="sm:w-6 sm:h-6" />
                   </button>
                   
                   <button
@@ -259,20 +257,20 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                     disabled={isAnimating}
                     className={`nav-arrow nav-arrow-right ${isAnimating ? 'disabled' : ''}`}
                   >
-                    <ChevronRight size={24} />
+                    <ChevronRight size={20} className="sm:w-6 sm:h-6" />
                   </button>
                 </>
               )}
 
               {/* Controls Panel */}
-              <div className="absolute top-4 right-4 flex space-x-2 z-20">
+              <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex space-x-2 z-20">
                 {images.length > 1 && (
                   <button
                     onClick={() => setAutoPlay(!autoPlay)}
                     className={`control-btn ${autoPlay ? 'active' : ''}`}
                     title={autoPlay ? 'Pause slideshow' : 'Start slideshow'}
                   >
-                    {autoPlay ? <RotateCcw size={18} /> : <RotateCcw size={18} />}
+                    <RotateCcw size={16} className="sm:w-5 sm:h-5" />
                   </button>
                 )}
                 
@@ -281,7 +279,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                   className="control-btn"
                   title={isZoomed ? 'Zoom out' : 'Zoom in'}
                 >
-                  <ZoomIn size={18} />
+                  <ZoomIn size={16} className="sm:w-5 sm:h-5" />
                 </button>
               </div>
               
@@ -294,7 +292,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
               
               {/* Image Counter with Enhanced Design */}
               {images.length > 1 && (
-                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black/80 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium z-10 border border-white/20">
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/80 backdrop-blur-sm text-white px-3 py-1 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium z-10 border border-white/20">
                   {currentImageIndex + 1} / {images.length}
                 </div>
               )}
@@ -302,8 +300,8 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
             
             {/* Enhanced Thumbnail Navigation */}
             {images.length > 1 && (
-              <div className="absolute bottom-20 left-4 right-4 z-10">
-                <div className="flex space-x-3 overflow-x-auto pb-2 px-2">
+              <div className="absolute bottom-16 left-2 right-2 sm:bottom-20 sm:left-4 sm:right-4 z-10">
+                <div className="flex space-x-2 sm:space-x-3 overflow-x-auto pb-2 px-2">
                   {images.map((img, index) => (
                     <button
                       key={index}
@@ -325,61 +323,65 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
                 </div>
               </div>
             )}
-
-           
           </div>
 
-          {/* Enhanced Product Details Section */}
-          <div className="lg:w-2/5 p-8 flex flex-col justify-between overflow-y-auto bg-gradient-to-br from-white to-gray-50">
+          {/* Enhanced Product Details Section - Responsive */}
+          <div className="lg:w-2/5 p-4 sm:p-6 md:p-8 flex flex-col justify-between overflow-y-auto bg-gradient-to-br from-white to-gray-50">
             {/* Header with Animation */}
             <div className="animate-slide-in-right">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-3 leading-tight">{product.name}</h2>
-                  <span className="inline-block text-sm text-blue-600 uppercase tracking-wider bg-blue-50 px-4 py-2 rounded-full font-semibold border border-blue-100">
+              <div className="flex justify-between items-start mb-4 sm:mb-6">
+                <div className="flex-1 mr-3">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2 sm:mb-3 leading-tight line-clamp-2">
+                    {product.name}
+                  </h2>
+                  <span className="inline-block text-xs sm:text-sm text-blue-600 uppercase tracking-wider bg-blue-50 px-3 py-1 sm:px-4 sm:py-2 rounded-full font-semibold border border-blue-100">
                     {product.category}
                   </span>
                 </div>
                 <button 
                   onClick={onClose} 
-                  className="close-btn"
+                  className="close-btn flex-shrink-0"
                 >
-                  <X size={24} />
+                  <X size={20} className="sm:w-6 sm:h-6" />
                 </button>
               </div>
             </div>
             
             {/* Description with Animation */}
-            <div className="mb-8 animate-slide-in-right animation-delay-1">
-              <h3 className="text-xl font-bold mb-4 text-gray-900 flex items-center">
+            <div className="mb-4 sm:mb-6 md:mb-8 animate-slide-in-right animation-delay-1">
+              <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-4 text-gray-900 flex items-center">
                 Product Details
-                <div className="ml-2 w-12 h-px bg-gradient-to-r from-blue-500 to-transparent"></div>
+                <div className="ml-2 w-8 sm:w-12 h-px bg-gradient-to-r from-blue-500 to-transparent"></div>
               </h3>
-              <p className="text-gray-700 leading-relaxed text-base">{product.description}</p>
+              <p className="text-gray-700 leading-relaxed text-sm sm:text-base line-clamp-4 sm:line-clamp-none max-h-24 sm:max-h-none overflow-y-auto">
+                {product.description}
+              </p>
             </div>
             
-            {/* Enhanced Price and Stock */}
-            <div className="mb-8 animate-slide-in-right animation-delay-2">
-              <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-4xl font-bold text-black">
-                    EGP {product.price}
-                  </span>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-600 mb-1">Stock Available</div>
-                    <span className="text-lg font-bold text-black">{product.stock_quantity}</span>
+            {/* Enhanced Price and Stock - Responsive */}
+            <div className="mb-4 sm:mb-6 md:mb-8 animate-slide-in-right animation-delay-2">
+              <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-inner">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-3 sm:space-y-0">
+                  <div className="flex-1">
+                    <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-black">
+                      EGP {product.price}
+                    </span>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <div className="text-xs sm:text-sm text-gray-600 mb-1">Stock Available</div>
+                    <span className="text-lg sm:text-xl font-bold text-black">{product.stock_quantity}</span>
                   </div>
                 </div>
                 
                 {product.stock_quantity <= 5 && product.stock_quantity > 0 && (
-                  <div className="flex items-center text-orange-600 text-sm font-medium bg-orange-50 px-3 py-2 rounded-lg">
+                  <div className="flex items-center text-orange-600 text-xs sm:text-sm font-medium bg-orange-50 px-3 py-2 rounded-lg mt-3">
                     <div className="w-2 h-2 bg-orange-500 rounded-full mr-2 animate-pulse"></div>
                     Limited stock remaining
                   </div>
                 )}
                 
                 {product.stock_quantity === 0 && (
-                  <div className="flex items-center text-red-600 text-sm font-medium bg-red-50 px-3 py-2 rounded-lg">
+                  <div className="flex items-center text-red-600 text-xs sm:text-sm font-medium bg-red-50 px-3 py-2 rounded-lg mt-3">
                     <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
                     Out of stock
                   </div>
@@ -387,19 +389,19 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
               </div>
             </div>
             
-            {/* Enhanced Action Buttons */}
-            <div className="space-y-4 animate-slide-in-right animation-delay-3">
+            {/* Enhanced Action Buttons - Responsive */}
+            <div className="space-y-3 sm:space-y-4 animate-slide-in-right animation-delay-3">
               <button
                 onClick={() => onAddToCart(product)}
                 disabled={product.stock_quantity === 0}
-                className="premium-btn primary"
+                className="premium-btn primary text-sm sm:text-base"
               >
                 {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
               </button>
               
               <button
                 onClick={onClose}
-                className="premium-btn secondary"
+                className="premium-btn secondary text-sm sm:text-base"
               >
                 Continue Shopping
               </button>
@@ -576,6 +578,21 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           transform-origin: center;
         }
 
+        /* Line clamp utility */
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        
+        .line-clamp-4 {
+          display: -webkit-box;
+          -webkit-line-clamp: 4;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
         /* Enhanced Mobile Touch Support */
         .touch-pan-y {
           -webkit-overflow-scrolling: touch;
@@ -600,12 +617,18 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           backdrop-filter: blur(10px);
           border: 1px solid rgba(255, 255, 255, 0.2);
           color: #1f2937;
-          padding: 12px;
+          padding: 8px;
           border-radius: 50%;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           z-index: 20;
           cursor: pointer;
+        }
+
+        @media (min-width: 640px) {
+          .nav-arrow {
+            padding: 12px;
+          }
         }
 
         .nav-arrow:hover {
@@ -614,8 +637,13 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
         }
 
-        .nav-arrow-left { left: 20px; }
-        .nav-arrow-right { right: 20px; }
+        .nav-arrow-left { left: 12px; }
+        .nav-arrow-right { right: 12px; }
+
+        @media (min-width: 640px) {
+          .nav-arrow-left { left: 20px; }
+          .nav-arrow-right { right: 20px; }
+        }
 
         .nav-arrow.disabled {
           opacity: 0.5;
@@ -628,10 +656,16 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           backdrop-filter: blur(10px);
           border: 1px solid rgba(255, 255, 255, 0.1);
           color: white;
-          padding: 10px;
+          padding: 8px;
           border-radius: 50%;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           cursor: pointer;
+        }
+
+        @media (min-width: 640px) {
+          .control-btn {
+            padding: 10px;
+          }
         }
 
         .control-btn:hover, .control-btn.active {
@@ -642,11 +676,17 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
         .close-btn {
           background: rgba(239, 68, 68, 0.1);
           color: #ef4444;
-          padding: 10px;
+          padding: 8px;
           border-radius: 50%;
           border: 1px solid rgba(239, 68, 68, 0.2);
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           cursor: pointer;
+        }
+
+        @media (min-width: 640px) {
+          .close-btn {
+            padding: 10px;
+          }
         }
 
         .close-btn:hover {
@@ -656,19 +696,40 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
 
         .thumbnail {
           flex-shrink: 0;
-          width: 80px;
-          height: 80px;
+          width: 50px;
+          height: 50px;
           overflow: hidden;
-          border-radius: 12px;
+          border-radius: 8px;
           transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
         }
 
+        @media (min-width: 640px) {
+          .thumbnail {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+          }
+        }
+
+        @media (min-width: 768px) {
+          .thumbnail {
+            width: 70px;
+            height: 70px;
+            border-radius: 12px;
+          }
+        }
+
         .thumbnail-active {
-          ring: 3px;
-          ring-color: rgba(59, 130, 246, 0.8);
-          shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
-          transform: scale(1.15);
+          border: 3px solid rgba(59, 130, 246, 0.8);
+          box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+          transform: scale(1.1);
+        }
+
+        @media (min-width: 640px) {
+          .thumbnail-active {
+            transform: scale(1.15);
+          }
         }
 
         .thumbnail-inactive {
@@ -696,17 +757,23 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
 
         .premium-btn {
           width: 100%;
-          padding: 16px 24px;
+          padding: 12px 16px;
           font-weight: 600;
-          font-size: 16px;
           letter-spacing: 0.5px;
           text-transform: uppercase;
-          border-radius: 12px;
+          border-radius: 10px;
           transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
           overflow: hidden;
           cursor: pointer;
           border: none;
+        }
+
+        @media (min-width: 640px) {
+          .premium-btn {
+            padding: 16px 24px;
+            border-radius: 12px;
+          }
         }
 
         .premium-btn::before {
@@ -761,27 +828,37 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1);
         }
 
-        /* Responsive Design */
-        @media (max-width: 1024px) {
-          .nav-arrow { padding: 10px; }
-          .nav-arrow-left { left: 12px; }
-          .nav-arrow-right { right: 12px; }
-          .thumbnail { width: 60px; height: 60px; }
-        }
-
         /* Custom Scrollbar */
         .overflow-x-auto::-webkit-scrollbar {
-          height: 6px;
+          height: 4px;
+        }
+        
+        @media (min-width: 640px) {
+          .overflow-x-auto::-webkit-scrollbar {
+            height: 6px;
+          }
         }
         
         .overflow-x-auto::-webkit-scrollbar-track {
           background: rgba(0, 0, 0, 0.1);
-          border-radius: 3px;
+          border-radius: 2px;
+        }
+        
+        @media (min-width: 640px) {
+          .overflow-x-auto::-webkit-scrollbar-track {
+            border-radius: 3px;
+          }
         }
         
         .overflow-x-auto::-webkit-scrollbar-thumb {
           background: rgba(59, 130, 246, 0.5);
-          border-radius: 3px;
+          border-radius: 2px;
+        }
+        
+        @media (min-width: 640px) {
+          .overflow-x-auto::-webkit-scrollbar-thumb {
+            border-radius: 3px;
+          }
         }
         
         .overflow-x-auto::-webkit-scrollbar-thumb:hover {

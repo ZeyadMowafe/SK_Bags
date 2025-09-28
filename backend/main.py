@@ -128,7 +128,49 @@ def _make_absolute_media(product: dict) -> dict:
     except Exception:
         pass
     return product
-
+async def ensure_storage_bucket():
+    """التأكد من وجود الـ bucket وإنشاؤه إذا لم يكن موجوداً - نسخة مُصححة"""
+    if not supabase_storage:
+        return False
+    
+    try:
+        # محاولة جلب قائمة الـ buckets
+        buckets = supabase_storage.storage.list_buckets()
+        bucket_exists = False
+        
+        # فحص وجود الـ bucket بطريقة آمنة
+        if buckets:
+            for bucket in buckets:
+                bucket_id = None
+                if hasattr(bucket, 'id'):
+                    bucket_id = bucket.id
+                elif hasattr(bucket, 'name'):
+                    bucket_id = bucket.name
+                elif isinstance(bucket, dict):
+                    bucket_id = bucket.get('id') or bucket.get('name')
+                
+                if bucket_id == BUCKET_NAME:
+                    bucket_exists = True
+                    break
+        
+        if not bucket_exists:
+            logger.info(f"Creating bucket: {BUCKET_NAME}")
+            try:
+                # محاولة إنشاء bucket جديد
+                supabase_storage.storage.create_bucket(BUCKET_NAME, public=True)
+                logger.info(f"Bucket {BUCKET_NAME} created successfully")
+            except Exception as create_error:
+                logger.warning(f"Could not create bucket automatically: {create_error}")
+                logger.info("Please create the bucket manually in Supabase Dashboard")
+                return False
+        else:
+            logger.info(f"Bucket {BUCKET_NAME} already exists")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error checking/creating bucket: {e}")
+        return False
 # دالة محسنة لرفع الملفات إلى Supabase
 async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
     """دالة رفع مضمونة تجرب طرق متعددة"""
@@ -622,23 +664,85 @@ async def upload_file(
 
 @app.get("/admin/test-storage")
 async def test_storage(current_user=Depends(get_current_active_user)):
-    """اختبار سريع لإعدادات Storage"""
+    """اختبار شامل لإعدادات Storage - نسخة مُصححة"""
     try:
         result = {
             "supabase_url": SUPABASE_URL,
             "bucket_name": BUCKET_NAME,
             "storage_client_available": supabase_storage is not None,
-            "backend_url": BACKEND_PUBLIC_URL
+            "backend_url": BACKEND_PUBLIC_URL,
+            "service_role_key_configured": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
         }
         
         if supabase_storage:
             try:
-                # محاولة جلب معلومات الـ bucket
+                # فحص الـ buckets مع معالجة أفضل للأخطاء
                 buckets = supabase_storage.storage.list_buckets()
                 result["buckets_found"] = len(buckets) if buckets else 0
-                result["target_bucket_exists"] = any(b.get('id') == BUCKET_NAME for b in buckets) if buckets else False
+                
+                # فحص وجود الـ bucket المطلوب بطريقة آمنة
+                target_bucket_exists = False
+                bucket_is_public = False
+                
+                if buckets:
+                    for bucket in buckets:
+                        # التعامل مع أنواع مختلفة من الـ bucket objects
+                        bucket_id = None
+                        bucket_public = False
+                        
+                        if hasattr(bucket, 'id'):
+                            bucket_id = bucket.id
+                        elif hasattr(bucket, 'name'):
+                            bucket_id = bucket.name
+                        elif isinstance(bucket, dict):
+                            bucket_id = bucket.get('id') or bucket.get('name')
+                        
+                        if hasattr(bucket, 'public'):
+                            bucket_public = bucket.public
+                        elif isinstance(bucket, dict):
+                            bucket_public = bucket.get('public', False)
+                        
+                        if bucket_id == BUCKET_NAME:
+                            target_bucket_exists = True
+                            bucket_is_public = bucket_public
+                            break
+                
+                result["target_bucket_exists"] = target_bucket_exists
+                result["bucket_is_public"] = bucket_is_public
+                
+                # إذا كان الـ bucket موجود، جرب عملية رفع تجريبية
+                if target_bucket_exists:
+                    try:
+                        test_content = b"test image data"
+                        test_filename = f"test-{uuid.uuid4()}.txt"
+                        
+                        # محاولة الرفع
+                        upload_response = supabase_storage.storage.from_(BUCKET_NAME).upload(
+                            path=test_filename,
+                            file=test_content
+                        )
+                        result["upload_test"] = "success"
+                        
+                        # إنشاء الرابط العام
+                        public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{test_filename}"
+                        result["test_file_url"] = public_url
+                        
+                        # حذف الملف التجريبي
+                        try:
+                            supabase_storage.storage.from_(BUCKET_NAME).remove([test_filename])
+                            result["cleanup_test"] = "success"
+                        except:
+                            result["cleanup_test"] = "failed_but_not_critical"
+                        
+                    except Exception as upload_error:
+                        result["upload_test"] = f"failed: {str(upload_error)}"
+                else:
+                    result["upload_test"] = "skipped - bucket not found"
+                    
             except Exception as e:
                 result["bucket_check_error"] = str(e)
+        else:
+            result["error"] = "Supabase Storage client not initialized"
         
         return result
         

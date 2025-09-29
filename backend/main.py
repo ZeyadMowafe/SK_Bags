@@ -11,7 +11,7 @@ from db_service import db_service_instance as db
 import os
 import shutil
 import uuid
-import io  # ← ده الناقص!
+import io  
 from pathlib import Path
 import logging
 
@@ -128,21 +128,21 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
         
         logger.info(f"Uploading {filename} ({len(file_content)} bytes)")
         
-        # استخدام BytesIO
-        file_buffer = io.BytesIO(file_content)
-        
-        # رفع الملف
+        # استخدام bytes مباشرة بدلاً من BytesIO
         result = supabase_storage.storage.from_(BUCKET_NAME).upload(
-            path=filename, 
-            file=file_buffer,
+            path=filename,
+            file=file_content,  # 👈 bytes مباشرة بدون BytesIO
             file_options={"content-type": content_type}
         )
         
-        logger.info(f"Supabase upload raw response: {result}")  # 👈 اطبع الرد
+        logger.info(f"Supabase upload response: {result}")
         
-        # لو فيه Error في الرد
-        if isinstance(result, dict) and result.get("error"):
-            raise Exception(result["error"])
+        # التحقق من الأخطاء
+        if isinstance(result, dict):
+            if result.get("error"):
+                raise Exception(result["error"])
+            if result.get("statusCode") and result["statusCode"] >= 400:
+                raise Exception(result.get("message", "Upload failed"))
         
         # إنشاء URL العام
         public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{filename}"
@@ -151,7 +151,7 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
         return public_url
         
     except Exception as e:
-        logger.error(f"Upload failed: {e}")
+        logger.error(f"Supabase upload failed: {e}")
         raise
 
 

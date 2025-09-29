@@ -173,90 +173,31 @@ async def ensure_storage_bucket():
         return False
 # دالة محسنة لرفع الملفات إلى Supabase
 async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
-    """دالة رفع مُصححة نهائياً"""
+    """دالة رفع مبسطة وفعالة"""
     try:
         if not supabase_storage:
             raise Exception("Supabase Storage not initialized")
         
-        logger.info(f"=== Supabase Upload Start ===")
-        logger.info(f"Filename: {filename}")
-        logger.info(f"Content-Type: {content_type}")
-        logger.info(f"File size: {len(file_content)} bytes")
-        logger.info(f"Bucket: {BUCKET_NAME}")
+        logger.info(f"Uploading {filename} to Supabase")
         
-        # التحقق من وجود الـ bucket
-        try:
-            buckets = supabase_storage.storage.list_buckets()
-            bucket_exists = False
-            for bucket in buckets:
-                bucket_id = getattr(bucket, 'id', getattr(bucket, 'name', None))
-                if bucket_id == BUCKET_NAME:
-                    bucket_exists = True
-                    logger.info(f"Bucket {BUCKET_NAME} found")
-                    break
-            
-            if not bucket_exists:
-                raise Exception(f"Bucket '{BUCKET_NAME}' does not exist")
-                
-        except Exception as bucket_error:
-            logger.error(f"Bucket check failed: {bucket_error}")
-            raise Exception(f"Bucket check failed: {bucket_error}")
+        # استخدام BytesIO
+        file_obj = io.BytesIO(file_content)
         
-        # محاولة الرفع - الطريقة المُصححة
-        logger.info("Attempting upload...")
+        # الطريقة المبسطة - تعمل مع معظم إصدارات Supabase
+        result = supabase_storage.storage.from_(BUCKET_NAME).upload(
+            filename, 
+            file_obj
+        )
         
-        try:
-            # استخدام io.BytesIO بدلاً من bytes مباشرة
-            import io
-            file_buffer = io.BytesIO(file_content)
-            
-            response = supabase_storage.storage.from_(BUCKET_NAME).upload(
-                path=filename,
-                file=file_buffer,
-                file_options={"content-type": content_type}
-            )
-            logger.info("Upload method with BytesIO successful")
-            
-        except Exception as e1:
-            logger.warning(f"BytesIO method failed: {e1}")
-            
-            try:
-                # المحاولة الثانية: مع upsert
-                file_buffer = io.BytesIO(file_content)
-                response = supabase_storage.storage.from_(BUCKET_NAME).upload(
-                    path=filename,
-                    file=file_buffer,
-                    file_options={"content-type": content_type, "upsert": True}
-                )
-                logger.info("Upload method with upsert successful")
-                
-            except Exception as e2:
-                logger.warning(f"BytesIO + upsert failed: {e2}")
-                
-                try:
-                    # المحاولة الثالثة: تمرير البيانات مباشرة
-                    response = supabase_storage.storage.from_(BUCKET_NAME).upload(
-                        filename, 
-                        file_content
-                    )
-                    logger.info("Direct upload successful")
-                    
-                except Exception as e3:
-                    logger.error(f"All upload methods failed: {e1}, {e2}, {e3}")
-                    raise Exception(f"Upload failed: {str(e3)}")
-        
-        # إنشاء الرابط العام
+        # إنشاء URL
         public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{filename}"
-        logger.info(f"Generated public URL: {public_url}")
-        logger.info("=== Supabase Upload Success ===")
         
+        logger.info(f"Upload successful: {public_url}")
         return public_url
         
     except Exception as e:
-        logger.error(f"=== Supabase Upload Failed ===")
-        logger.error(f"Error: {str(e)}")
-        raise Exception(f"Supabase upload error: {str(e)}")
-
+        logger.error(f"Supabase upload failed: {e}")
+        raise Exception(str(e))
 
 
 async def delete_from_supabase(filename: str) -> bool:

@@ -518,7 +518,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
         .main-image {
           width: 100%;
           height: 100%;
-          object-fit: contain;
+          object-fit: cover;
           transition: transform 0.5s ease;
           backface-visibility: hidden;
         }
@@ -712,6 +712,7 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           gap: 1.5rem;
           overflow-y: auto;
           background: linear-gradient(to bottom right, white, #f9fafb);
+          min-height: 0;
         }
 
         .details-header {
@@ -874,6 +875,8 @@ const ProductModal = ({ product, onClose, onAddToCart }) => {
           flex-direction: column;
           gap: 0.75rem;
           animation: slideInRight 0.4s ease-out 0.3s backwards;
+          margin-top: auto;
+          padding-top: 1rem;
         }
 
         .btn {

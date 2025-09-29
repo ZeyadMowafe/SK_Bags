@@ -118,6 +118,8 @@ def _make_absolute_media(product: dict) -> dict:
         pass
     return product
 
+import io
+
 async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
     """رفع ملف إلى Supabase Storage"""
     try:
@@ -131,9 +133,16 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
         
         # رفع الملف
         result = supabase_storage.storage.from_(BUCKET_NAME).upload(
-            filename, 
-            file_buffer
+            path=filename, 
+            file=file_buffer,
+            file_options={"content-type": content_type}
         )
+        
+        logger.info(f"Supabase upload raw response: {result}")  # 👈 اطبع الرد
+        
+        # لو فيه Error في الرد
+        if isinstance(result, dict) and result.get("error"):
+            raise Exception(result["error"])
         
         # إنشاء URL العام
         public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{filename}"
@@ -144,6 +153,7 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise
+
 
 # ===== Startup =====
 @app.on_event("startup")

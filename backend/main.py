@@ -11,41 +11,39 @@ from db_service import db_service_instance as db
 import os
 import shutil
 import uuid
+import io  # ← ده الناقص!
 from pathlib import Path
 import logging
 
-import os
 from dotenv import load_dotenv
-
-# Supabase imports
 from supabase import create_client, Client
 
 # تحميل المتغيرات البيئية
 load_dotenv()
 
-# إعداد CORS من env vars
-ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(',') if origin.strip()]
-
-# عنوان الباك إند العام لاستخدامه في إنشاء روابط الملفات
+# إعداد CORS
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(',') if origin.strip()]
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000").rstrip('/')
 
-# إعداد Supabase للـ Storage - إصلاح الإعدادات
+# إعداد Supabase Storage
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "product-images")
 
-# إنشاء عميل Supabase للـ Storage
+# إعداد اللوقر أولاً
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# إنشاء عميل Supabase
 supabase_storage: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase_storage = create_client(SUPABASE_URL, SUPABASE_KEY)
-        logger = logging.getLogger(__name__)
-        logger.info("Supabase Storage client initialized successfully")
+        logger.info("Supabase Storage initialized")
     except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.error(f"Failed to initialize Supabase Storage client: {e}")
+        logger.error(f"Supabase init failed: {e}")
 
-# استيراد الملفات المحلية
+# استيراد Auth & Models
 from auth import (
     create_access_token, 
     authenticate_user, 
@@ -57,18 +55,17 @@ from auth import (
 from models import (
     Product, ProductCreate, ProductUpdate,
     Order, OrderCreate, OrderUpdate, OrderStatus,
-    Token, ApiResponse, ProductListResponse, OrderListResponse,
-    FileUploadResponse, DashboardStats, CustomerInfo, OrderItemCreate
+    Token, FileUploadResponse, DashboardStats, OrderItemCreate
 )
 
 # إعداد التطبيق
 app = FastAPI(
-    title="Hand Made Bags API",
-    description="API for managing handmade bags e-commerce",
+    title="SK Bags API",
+    description="API for managing handmade bags",
     version="1.0.0"
 )
 
-# Middleware لتحويل المسارات التي تبدأ بـ /api إلى المسارات الحالية
+# Middleware
 class ApiPrefixMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.scope.get('path', '')
@@ -81,7 +78,6 @@ class ApiPrefixMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(ApiPrefixMiddleware)
 
-# إعداد CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -90,29 +86,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# إعداد المجلدات (احتياطي في حالة عدم توفر Supabase)
+# إعداد المجلدات
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-
-# تقديم الملفات الثابتة (احتياطي)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# إعداد اللوقر
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# ===== Helpers =====
+# ===== Helper Functions =====
 def _make_absolute_media(product: dict) -> dict:
+    """تحويل روابط الصور النسبية إلى مطلقة"""
     try:
-        # image_url
         img = product.get('image_url')
-        if isinstance(img, str) and img and not img.startswith('http'):  # relative/path-like
+        if isinstance(img, str) and img and not img.startswith('http'):
             if img.startswith('/uploads/'):
                 product['image_url'] = f"{BACKEND_PUBLIC_URL}{img}"
             else:
                 product['image_url'] = f"{BACKEND_PUBLIC_URL}/uploads/{img.lstrip('/')}"
 
-        # images list
         imgs = product.get('images')
         if isinstance(imgs, list):
             normalized = []
@@ -128,233 +117,92 @@ def _make_absolute_media(product: dict) -> dict:
     except Exception:
         pass
     return product
-async def ensure_storage_bucket():
-    """التأكد من وجود الـ bucket وإنشاؤه إذا لم يكن موجوداً - نسخة مُصححة"""
-    if not supabase_storage:
-        return False
-    
-    try:
-        # محاولة جلب قائمة الـ buckets
-        buckets = supabase_storage.storage.list_buckets()
-        bucket_exists = False
-        
-        # فحص وجود الـ bucket بطريقة آمنة
-        if buckets:
-            for bucket in buckets:
-                bucket_id = None
-                if hasattr(bucket, 'id'):
-                    bucket_id = bucket.id
-                elif hasattr(bucket, 'name'):
-                    bucket_id = bucket.name
-                elif isinstance(bucket, dict):
-                    bucket_id = bucket.get('id') or bucket.get('name')
-                
-                if bucket_id == BUCKET_NAME:
-                    bucket_exists = True
-                    break
-        
-        if not bucket_exists:
-            logger.info(f"Creating bucket: {BUCKET_NAME}")
-            try:
-                # محاولة إنشاء bucket جديد
-                supabase_storage.storage.create_bucket(BUCKET_NAME, public=True)
-                logger.info(f"Bucket {BUCKET_NAME} created successfully")
-            except Exception as create_error:
-                logger.warning(f"Could not create bucket automatically: {create_error}")
-                logger.info("Please create the bucket manually in Supabase Dashboard")
-                return False
-        else:
-            logger.info(f"Bucket {BUCKET_NAME} already exists")
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error checking/creating bucket: {e}")
-        return False
-# دالة محسنة لرفع الملفات إلى Supabase
+
 async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
-    """دالة رفع مبسطة وفعالة"""
+    """رفع ملف إلى Supabase Storage"""
     try:
         if not supabase_storage:
-            raise Exception("Supabase Storage not initialized")
+            raise Exception("Supabase not initialized")
         
-        logger.info(f"Uploading {filename} to Supabase")
+        logger.info(f"Uploading {filename} ({len(file_content)} bytes)")
         
         # استخدام BytesIO
-        file_obj = io.BytesIO(file_content)
+        file_buffer = io.BytesIO(file_content)
         
-        # الطريقة المبسطة - تعمل مع معظم إصدارات Supabase
+        # رفع الملف
         result = supabase_storage.storage.from_(BUCKET_NAME).upload(
             filename, 
-            file_obj
+            file_buffer
         )
         
-        # إنشاء URL
+        # إنشاء URL العام
         public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{filename}"
+        logger.info(f"Upload success: {public_url}")
         
-        logger.info(f"Upload successful: {public_url}")
         return public_url
         
     except Exception as e:
-        logger.error(f"Supabase upload failed: {e}")
-        raise Exception(str(e))
+        logger.error(f"Upload failed: {e}")
+        raise
 
-
-async def delete_from_supabase(filename: str) -> bool:
-    """حذف ملف من Supabase Storage"""
-    try:
-        if not supabase_storage:
-            return False
-        
-        response = supabase_storage.storage.from_(BUCKET_NAME).remove([filename])
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error deleting from Supabase: {e}")
-        return False
-
-
-@app.post("/admin/upload-test")
-async def upload_test(
-    file: UploadFile = File(...),
-    current_user=Depends(get_current_active_user)
-):
-    """اختبار رفع مبسط للتشخيص"""
-    try:
-        logger.info(f"=== Test Upload Start ===")
-        
-        # قراءة الملف
-        file_content = await file.read()
-        file_size = len(file_content)
-        
-        # اسم الملف
-        unique_filename = f"test-{uuid.uuid4()}.{file.filename.split('.')[-1]}"
-        
-        logger.info(f"Test filename: {unique_filename}")
-        logger.info(f"File size: {file_size}")
-        
-        if not supabase_storage:
-            return {"error": "Supabase storage not initialized"}
-        
-        # محاولة مبسطة جداً
-        try:
-            import io
-            file_buffer = io.BytesIO(file_content)
-            
-            # أبسط طريقة ممكنة
-            result = supabase_storage.storage.from_(BUCKET_NAME).upload(
-                unique_filename,
-                file_buffer
-            )
-            
-            logger.info(f"Upload result: {result}")
-            logger.info(f"Upload result type: {type(result)}")
-            
-            public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
-            
-            return {
-                "success": True,
-                "filename": unique_filename,
-                "url": public_url,
-                "upload_result": str(result),
-                "result_type": str(type(result))
-            }
-            
-        except Exception as upload_error:
-            logger.error(f"Upload error: {upload_error}")
-            logger.error(f"Upload error type: {type(upload_error)}")
-            return {
-                "error": str(upload_error),
-                "error_type": str(type(upload_error))
-            }
-        
-    except Exception as e:
-        logger.error(f"Test upload error: {e}")
-        return {"error": str(e)}
-# ===== Startup Events =====
+# ===== Startup =====
 @app.on_event("startup")
 async def startup_event():
-    """إعداد التطبيق عند البدء"""
     try:
         await setup_default_admin()
-        logger.info("Application startup completed successfully")
-        
-        # التحقق من إعداد Supabase
-        if supabase_storage:
-            logger.info("Using Supabase Storage for file uploads")
-        else:
-            logger.warning("Supabase not configured - using local storage")
-            
+        logger.info("App started successfully")
     except Exception as e:
-        logger.error(f"Error during startup: {e}")
+        logger.error(f"Startup error: {e}")
 
 # ===== Health Check =====
 @app.get("/health")
 async def health_check():
-    """فحص صحة التطبيق"""
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
-# إضافة endpoint للتحقق من حالة التطبيق
 @app.get("/status")
 async def get_status():
-    """فحص شامل لحالة التطبيق"""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow(),
-        "environment": os.getenv("ENVIRONMENT", "development"),
         "backend_url": BACKEND_PUBLIC_URL,
-        "supabase_configured": bool(SUPABASE_URL and SUPABASE_KEY),
-        "bucket_name": BUCKET_NAME,
-        "allowed_origins": ALLOWED_ORIGINS
+        "supabase_configured": bool(supabase_storage),
+        "bucket_name": BUCKET_NAME
     }
 
-# ===== Authentication Endpoints =====
+# ===== Auth Endpoints =====
 @app.post("/admin/login", response_model=Token)
 async def admin_login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """تسجيل دخول الادمن"""
     user = await authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Incorrect credentials"
         )
     
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["email"]}, expires_delta=access_token_expires
+        data={"sub": user["email"]}, 
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    
     return {"access_token": access_token, "token_type": "bearer"}
 
-# Alias to match frontend expectation: /auth/login (same behavior as /admin/login)
 @app.post("/auth/login", response_model=Token)
 async def auth_login_alias(form_data: OAuth2PasswordRequestForm = Depends()):
     return await admin_login(form_data)
 
 @app.get("/admin/me")
 async def get_current_admin(current_user=Depends(get_current_active_user)):
-    """جلب بيانات الادمن الحالي"""
     return {
         "id": current_user["id"],
         "email": current_user["email"],
         "is_active": current_user["is_active"]
     }
 
-# ===== Products Endpoints =====
+# ===== Products =====
 @app.get("/products", response_model=List[Product])
-async def get_products(
-    skip: int = 0,
-    limit: int = 50,
-    category: Optional[str] = None,
-    search: Optional[str] = None
-):
-    """جلب قائمة المنتجات"""
+async def get_products(skip: int = 0, limit: int = 50, category: Optional[str] = None, search: Optional[str] = None):
     try:
         products = await db.get_all_products()
         products = [_make_absolute_media(dict(p)) for p in products]
         
-        # تطبيق الفلاتر
         if category:
             products = [p for p in products if p.get('category', '').lower() == category.lower()]
         
@@ -364,18 +212,13 @@ async def get_products(
                        search_lower in p.get('name', '').lower() or 
                        search_lower in p.get('description', '').lower()]
         
-        # تطبيق الـ pagination
-        total = len(products)
-        products = products[skip:skip + limit]
-        
-        return products
+        return products[skip:skip + limit]
     except Exception as e:
         logger.error(f"Error fetching products: {e}")
         raise HTTPException(status_code=500, detail="Error fetching products")
 
 @app.get("/products/{product_id}", response_model=Product)
 async def get_product(product_id: int):
-    """جلب منتج بالمعرف"""
     try:
         product = await db.get_product_by_id(product_id)
         if not product:
@@ -384,15 +227,11 @@ async def get_product(product_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching product {product_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching product")
+        logger.error(f"Error fetching product: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
 @app.post("/admin/products", response_model=Product)
-async def create_product(
-    product: ProductCreate,
-    current_user=Depends(get_current_active_user)
-):
-    """إنشاء منتج جديد (ادمن فقط)"""
+async def create_product(product: ProductCreate, current_user=Depends(get_current_active_user)):
     try:
         product_data = product.dict()
         product_data['created_at'] = datetime.utcnow().isoformat()
@@ -405,136 +244,81 @@ async def create_product(
         return _make_absolute_media(dict(new_product))
     except Exception as e:
         logger.error(f"Error creating product: {e}")
-        raise HTTPException(status_code=500, detail="Error creating product")
+        raise HTTPException(status_code=500, detail="Error")
 
 @app.put("/admin/products/{product_id}", response_model=Product)
-async def update_product(
-    product_id: int,
-    product: ProductUpdate,
-    current_user=Depends(get_current_active_user)
-):
-    """تحديث منتج (ادمن فقط)"""
+async def update_product(product_id: int, product: ProductUpdate, current_user=Depends(get_current_active_user)):
     try:
-        # التحقق من وجود المنتج
-        existing_product = await db.get_product_by_id(product_id)
-        if not existing_product:
-            raise HTTPException(status_code=404, detail="Product not found")
+        existing = await db.get_product_by_id(product_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Not found")
         
-        # تحديث البيانات
         update_data = {k: v for k, v in product.dict().items() if v is not None}
         update_data['updated_at'] = datetime.utcnow().isoformat()
         
-        updated_product = await db.update_product(product_id, update_data)
-        if not updated_product:
-            raise HTTPException(status_code=400, detail="Error updating product")
-        
-        return _make_absolute_media(dict(updated_product))
+        updated = await db.update_product(product_id, update_data)
+        return _make_absolute_media(dict(updated))
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating product {product_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error updating product")
+        logger.error(f"Update error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
 @app.delete("/admin/products/{product_id}")
-async def delete_product(
-    product_id: int,
-    current_user=Depends(get_current_active_user)
-):
-    """حذف منتج (ادمن فقط)"""
+async def delete_product(product_id: int, current_user=Depends(get_current_active_user)):
     try:
-        # التحقق من وجود المنتج
-        existing_product = await db.get_product_by_id(product_id)
-        if not existing_product:
-            raise HTTPException(status_code=404, detail="Product not found")
+        existing = await db.get_product_by_id(product_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Not found")
         
         await db.delete_product(product_id)
-        return {"success": True, "message": "Product deleted successfully"}
+        return {"success": True, "message": "Deleted"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting product {product_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error deleting product")
+        logger.error(f"Delete error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
-# ===== Orders Endpoints =====
+# ===== Orders =====
 @app.get("/admin/orders", response_model=List[Order])
-async def get_orders(
-    current_user=Depends(get_current_active_user),
-    skip: int = 0,
-    limit: int = 50,
-    status: Optional[str] = None
-):
-    """جلب قائمة الطلبات (ادمن فقط)"""
+async def get_orders(current_user=Depends(get_current_active_user), skip: int = 0, limit: int = 50, status: Optional[str] = None):
     try:
         orders = await db.get_all_orders()
         
-        # تطبيق فلتر الحالة
         if status:
             orders = [o for o in orders if o.get('status') == status]
         
-        # تطبيق الـ pagination
-        total = len(orders)
         orders = orders[skip:skip + limit]
         
-        # جلب عناصر كل طلب
         for order in orders:
             order['items'] = await db.get_order_items(order['id'])
         
         return orders
     except Exception as e:
-        logger.error(f"Error fetching orders: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching orders")
+        logger.error(f"Orders error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
-# Alias to match frontend expectation: GET /orders (admin-protected)
 @app.get("/orders", response_model=List[Order])
 async def get_orders_alias(current_user=Depends(get_current_active_user), skip: int = 0, limit: int = 50, status: Optional[str] = None):
-    return await get_orders(current_user=current_user, skip=skip, limit=limit, status=status)
-
-@app.get("/admin/orders/{order_id}", response_model=Order)
-async def get_order(
-    order_id: int,
-    current_user=Depends(get_current_active_user)
-):
-    """جلب طلب بالمعرف (ادمن فقط)"""
-    try:
-        order = await db.get_order_by_id(order_id)
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        
-        # جلب عناصر الطلب
-        order['items'] = await db.get_order_items(order_id)
-        
-        return order
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching order {order_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching order")
+    return await get_orders(current_user, skip, limit, status)
 
 @app.post("/orders", response_model=Order)
 async def create_order(order_data: OrderCreate):
-    """إنشاء طلب جديد"""
     try:
-        # حساب إجمالي الطلب
         total_amount = 0
         order_items_data = []
         
         for item in order_data.items:
-            # التحقق من المنتج والمخزون
             product = await db.get_product_by_id(item.product_id)
             if not product:
                 raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
             
             if product['stock_quantity'] < item.quantity:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Insufficient stock for product {product['name']}"
-                )
+                raise HTTPException(status_code=400, detail=f"Insufficient stock")
             
-            # حساب السعر الإجمالي للعنصر
             item_total = product['price'] * item.quantity
             total_amount += item_total
             
-            # إعداد بيانات عنصر الطلب
             order_items_data.append({
                 'product_id': item.product_id,
                 'quantity': item.quantity,
@@ -542,7 +326,6 @@ async def create_order(order_data: OrderCreate):
                 'total_price': item_total
             })
         
-        # إنشاء الطلب
         order_create_data = {
             'customer_info': order_data.customer_info.dict(),
             'status': OrderStatus.PENDING.value,
@@ -555,345 +338,167 @@ async def create_order(order_data: OrderCreate):
         if not new_order:
             raise HTTPException(status_code=400, detail="Error creating order")
         
-        # إضافة عناصر الطلب
         for item_data in order_items_data:
             item_data['order_id'] = new_order['id']
         
         order_items = await db.create_order_items(order_items_data)
         
-        # تحديث المخزون
         for item in order_data.items:
             product = await db.get_product_by_id(item.product_id)
             new_stock = product['stock_quantity'] - item.quantity
             await db.update_product(item.product_id, {'stock_quantity': new_stock})
         
-        # إضافة العناصر للطلب المُنشأ
         new_order['items'] = order_items
-        
         return new_order
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating order: {e}")
-        raise HTTPException(status_code=500, detail="Error creating order")
+        logger.error(f"Order creation error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
 @app.put("/admin/orders/{order_id}/status")
-async def update_order_status(
-    order_id: int,
-    status_update: OrderUpdate,
-    current_user=Depends(get_current_active_user)
-):
-    """تحديث حالة الطلب (ادمن فقط)"""
+async def update_order_status(order_id: int, status_update: OrderUpdate, current_user=Depends(get_current_active_user)):
     try:
-        # التحقق من وجود الطلب
-        existing_order = await db.get_order_by_id(order_id)
-        if not existing_order:
-            raise HTTPException(status_code=404, detail="Order not found")
+        existing = await db.get_order_by_id(order_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Not found")
         
-        # تحديث الحالة
-        updated_order = await db.update_order_status(order_id, status_update.status.value)
-        if not updated_order:
-            raise HTTPException(status_code=400, detail="Error updating order status")
-        
-        return {"success": True, "message": "Order status updated successfully", "order": updated_order}
+        updated = await db.update_order_status(order_id, status_update.status.value)
+        return {"success": True, "order": updated}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating order status {order_id}: {e}")
-        raise HTTPException(status_code=500, detail="Error updating order status")
+        logger.error(f"Status update error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
-# ===== File Upload Endpoints =====
+# ===== File Upload =====
 @app.post("/admin/upload", response_model=FileUploadResponse)
-async def upload_file(
-    file: UploadFile = File(...),
-    current_user=Depends(get_current_active_user)
-):
-    """رفع ملف مع تشخيص أفضل للأخطاء"""
+async def upload_file(file: UploadFile = File(...), current_user=Depends(get_current_active_user)):
     try:
-        logger.info(f"=== Starting file upload ===")
-        logger.info(f"Filename: {file.filename}")
-        logger.info(f"Content-Type: {file.content_type}")
+        logger.info(f"Upload: {file.filename}")
         
-        # فحص نوع الملف
         allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg']
         if file.content_type not in allowed_types:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"نوع الملف '{file.content_type}' غير مسموح. الأنواع المسموحة: {', '.join(allowed_types)}"
-            )
+            raise HTTPException(status_code=400, detail=f"Type not allowed: {file.content_type}")
         
-        # قراءة محتوى الملف
         file_content = await file.read()
         file_size = len(file_content)
-        logger.info(f"File size: {file_size} bytes")
-        
-        # فحص حجم الملف
-        max_size = 5 * 1024 * 1024  # 5MB
-        if file_size > max_size:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"حجم الملف كبير جداً ({file_size} bytes). الحد الأقصى: {max_size} bytes"
-            )
         
         if file_size == 0:
-            raise HTTPException(status_code=400, detail="الملف فارغ")
+            raise HTTPException(status_code=400, detail="Empty file")
         
-        # إنشاء اسم فريد للملف
-        file_extension = 'jpg'
-        if '.' in file.filename:
-            file_extension = file.filename.split('.')[-1].lower()
+        if file_size > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large")
         
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
-        logger.info(f"Generated filename: {unique_filename}")
+        ext = file.filename.split('.')[-1].lower() if '.' in file.filename else 'jpg'
+        unique_filename = f"{uuid.uuid4()}.{ext}"
         
-        # محاولة الرفع على Supabase
+        # محاولة Supabase أولاً
         if supabase_storage:
             try:
-                logger.info("Attempting Supabase upload...")
-                public_url = await upload_to_supabase(file_content, unique_filename, file.content_type)
-                
-                logger.info("=== Upload SUCCESS (Supabase) ===")
+                supabase_url = await upload_to_supabase(file_content, unique_filename, file.content_type)
                 return {
                     "success": True,
                     "filename": unique_filename,
-                    "url": public_url,
+                    "url": supabase_url,
                     "size": file_size,
-                    "storage": "supabase",
-                    "content_type": file.content_type
+                    "storage": "supabase"
                 }
-                
-            except Exception as supabase_error:
-                logger.error(f"=== Supabase upload failed ===")
-                logger.error(f"Error details: {supabase_error}")
-                
-                # في حالة الفشل، إما نرجع خطأ أو نحفظ محلياً
-                # دعنا نرجع الخطأ بدلاً من الحفظ المحلي لنعرف السبب
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"فشل الرفع على Supabase: {str(supabase_error)}"
-                )
-        else:
-            raise HTTPException(
-                status_code=500,
-                detail="خدمة Supabase Storage غير متاحة"
-            )
+            except Exception as e:
+                logger.warning(f"Supabase failed: {e}, trying local")
+        
+        # التخزين المحلي كـ backup
+        file_path = UPLOAD_DIR / unique_filename
+        with open(file_path, "wb") as buffer:
+            buffer.write(file_content)
+        
+        local_url = f"{BACKEND_PUBLIC_URL}/uploads/{unique_filename}"
+        return {
+            "success": True,
+            "filename": unique_filename,
+            "url": local_url,
+            "size": file_size,
+            "storage": "local"
+        }
             
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in upload: {e}")
-        raise HTTPException(status_code=500, detail=f"خطأ غير متوقع: {str(e)}")
+        logger.error(f"Upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-# دالة اختبار محسنة أيضاً
-@app.get("/admin/debug-storage")
-async def debug_storage(current_user=Depends(get_current_active_user)):
-    """تشخيص مفصل لـ Storage"""
-    try:
-        result = {
-            "supabase_url": SUPABASE_URL,
-            "bucket_name": BUCKET_NAME,
-            "service_role_key_present": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
-            "supabase_key_present": bool(os.getenv("SUPABASE_KEY")),
-            "storage_client_initialized": supabase_storage is not None,
-        }
-        
-        if supabase_storage:
-            try:
-                # جلب معلومات الـ buckets
-                buckets = supabase_storage.storage.list_buckets()
-                result["buckets_list"] = []
-                
-                for bucket in buckets:
-                    bucket_info = {
-                        "id": getattr(bucket, 'id', None),
-                        "name": getattr(bucket, 'name', None), 
-                        "public": getattr(bucket, 'public', None),
-                        "created_at": str(getattr(bucket, 'created_at', None))
-                    }
-                    result["buckets_list"].append(bucket_info)
-                    
-                # فحص الـ bucket المطلوب
-                target_bucket = next((b for b in result["buckets_list"] 
-                                    if b.get('id') == BUCKET_NAME or b.get('name') == BUCKET_NAME), None)
-                
-                result["target_bucket_found"] = target_bucket is not None
-                result["target_bucket_details"] = target_bucket
-                
-                if target_bucket:
-                    # محاولة جلب الملفات الموجودة
-                    try:
-                        files = supabase_storage.storage.from_(BUCKET_NAME).list()
-                        result["files_in_bucket"] = len(files) if files else 0
-                        result["sample_files"] = files[:5] if files else []
-                    except Exception as files_error:
-                        result["files_error"] = str(files_error)
-                
-            except Exception as buckets_error:
-                result["buckets_error"] = str(buckets_error)
-        
-        return result
-        
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/admin/test-storage")
-async def test_storage(current_user=Depends(get_current_active_user)):
-    """اختبار شامل لإعدادات Storage - نسخة مُصححة"""
-    try:
-        result = {
-            "supabase_url": SUPABASE_URL,
-            "bucket_name": BUCKET_NAME,
-            "storage_client_available": supabase_storage is not None,
-            "backend_url": BACKEND_PUBLIC_URL,
-            "service_role_key_configured": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
-        }
-        
-        if supabase_storage:
-            try:
-                # فحص الـ buckets مع معالجة أفضل للأخطاء
-                buckets = supabase_storage.storage.list_buckets()
-                result["buckets_found"] = len(buckets) if buckets else 0
-                
-                # فحص وجود الـ bucket المطلوب بطريقة آمنة
-                target_bucket_exists = False
-                bucket_is_public = False
-                
-                if buckets:
-                    for bucket in buckets:
-                        # التعامل مع أنواع مختلفة من الـ bucket objects
-                        bucket_id = None
-                        bucket_public = False
-                        
-                        if hasattr(bucket, 'id'):
-                            bucket_id = bucket.id
-                        elif hasattr(bucket, 'name'):
-                            bucket_id = bucket.name
-                        elif isinstance(bucket, dict):
-                            bucket_id = bucket.get('id') or bucket.get('name')
-                        
-                        if hasattr(bucket, 'public'):
-                            bucket_public = bucket.public
-                        elif isinstance(bucket, dict):
-                            bucket_public = bucket.get('public', False)
-                        
-                        if bucket_id == BUCKET_NAME:
-                            target_bucket_exists = True
-                            bucket_is_public = bucket_public
-                            break
-                
-                result["target_bucket_exists"] = target_bucket_exists
-                result["bucket_is_public"] = bucket_is_public
-                
-                # إذا كان الـ bucket موجود، جرب عملية رفع تجريبية
-                if target_bucket_exists:
-                    try:
-                        test_content = b"test image data"
-                        test_filename = f"test-{uuid.uuid4()}.txt"
-                        
-                        # محاولة الرفع
-                        upload_response = supabase_storage.storage.from_(BUCKET_NAME).upload(
-                            path=test_filename,
-                            file=test_content
-                        )
-                        result["upload_test"] = "success"
-                        
-                        # إنشاء الرابط العام
-                        public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{test_filename}"
-                        result["test_file_url"] = public_url
-                        
-                        # حذف الملف التجريبي
-                        try:
-                            supabase_storage.storage.from_(BUCKET_NAME).remove([test_filename])
-                            result["cleanup_test"] = "success"
-                        except:
-                            result["cleanup_test"] = "failed_but_not_critical"
-                        
-                    except Exception as upload_error:
-                        result["upload_test"] = f"failed: {str(upload_error)}"
-                else:
-                    result["upload_test"] = "skipped - bucket not found"
-                    
-            except Exception as e:
-                result["bucket_check_error"] = str(e)
-        else:
-            result["error"] = "Supabase Storage client not initialized"
-        
-        return result
-        
-    except Exception as e:
-        return {"error": str(e)}
-
-# Alias to match frontend expectation: /upload-simple (admin-protected)
 @app.post("/upload-simple", response_model=FileUploadResponse)
-async def upload_file_alias(
-    file: UploadFile = File(...),
-    current_user=Depends(get_current_active_user)
-):
-    return await upload_file(file=file, current_user=current_user)
+async def upload_simple(file: UploadFile = File(...), current_user=Depends(get_current_active_user)):
+    return await upload_file(file, current_user)
 
-# ===== Dashboard/Statistics Endpoints =====
+# ===== Storage Tests =====
+@app.get("/admin/storage-status")
+async def storage_status(current_user=Depends(get_current_active_user)):
+    result = {
+        "supabase_configured": bool(supabase_storage),
+        "bucket_name": BUCKET_NAME,
+        "backend_url": BACKEND_PUBLIC_URL
+    }
+    
+    if supabase_storage:
+        try:
+            buckets = supabase_storage.storage.list_buckets()
+            result["buckets_count"] = len(buckets) if buckets else 0
+            result["target_exists"] = any(
+                getattr(b, 'id', '') == BUCKET_NAME or getattr(b, 'name', '') == BUCKET_NAME 
+                for b in buckets
+            )
+        except Exception as e:
+            result["error"] = str(e)
+    
+    return result
+
+# ===== Dashboard =====
 @app.get("/admin/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(current_user=Depends(get_current_active_user)):
-    """جلب إحصائيات لوحة التحكم (ادمن فقط)"""
     try:
-        # جلب جميع البيانات
         products = await db.get_all_products()
         orders = await db.get_all_orders()
         
-        # حساب الإحصائيات
-        total_products = len(products)
-        total_orders = len(orders)
-        pending_orders = len([o for o in orders if o.get('status') == 'pending'])
-        total_revenue = sum(o.get('total_amount', 0) for o in orders if o.get('status') in ['confirmed', 'shipped', 'delivered'])
-        low_stock_products = len([p for p in products if p.get('stock_quantity', 0) < 5])
-        
         return {
-            "total_products": total_products,
-            "total_orders": total_orders,
-            "pending_orders": pending_orders,
-            "total_revenue": total_revenue,
-            "low_stock_products": low_stock_products
+            "total_products": len(products),
+            "total_orders": len(orders),
+            "pending_orders": len([o for o in orders if o.get('status') == 'pending']),
+            "total_revenue": sum(o.get('total_amount', 0) for o in orders if o.get('status') in ['confirmed', 'shipped', 'delivered']),
+            "low_stock_products": len([p for p in products if p.get('stock_quantity', 0) < 5])
         }
     except Exception as e:
-        logger.error(f"Error fetching dashboard stats: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching dashboard stats")
+        logger.error(f"Stats error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
-# ===== Search Endpoints =====
+# ===== Search & Categories =====
 @app.get("/search")
-async def search_products(
-    q: str,
-    limit: int = 20
-):
-    """البحث في المنتجات"""
+async def search_products(q: str, limit: int = 20):
     try:
         products = await db.get_all_products()
         search_lower = q.lower()
         
-        # البحث في الاسم والوصف والكاتيجوري
-        filtered_products = [
-            p for p in products if 
+        filtered = [p for p in products if 
             search_lower in p.get('name', '').lower() or 
             search_lower in p.get('description', '').lower() or 
             search_lower in p.get('category', '').lower()
         ]
         
-        return filtered_products[:limit]
+        return filtered[:limit]
     except Exception as e:
-        logger.error(f"Error searching products: {e}")
-        raise HTTPException(status_code=500, detail="Error searching products")
+        logger.error(f"Search error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
-# ===== Categories Endpoint =====
 @app.get("/categories")
 async def get_categories():
-    """جلب قائمة الكاتيجوريات المتاحة"""
     try:
         products = await db.get_all_products()
         categories = list(set(p.get('category', '') for p in products if p.get('category')))
         return {"categories": sorted(categories)}
     except Exception as e:
-        logger.error(f"Error fetching categories: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching categories")
+        logger.error(f"Categories error: {e}")
+        raise HTTPException(status_code=500, detail="Error")
 
 # ===== Error Handlers =====
 @app.exception_handler(HTTPException)
@@ -905,95 +510,55 @@ async def http_exception_handler(request, exc):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {exc}")
+    logger.error(f"Unhandled: {exc}")
     return JSONResponse(
         status_code=500,
-        content={"success": False, "message": "Internal server error"}
+        content={"success": False, "message": "Internal error"}
     )
 
-# ===== Frontend Serving (Must be LAST) =====
-
-# Mount static files (CSS, JS, images) - بدون decorator
+# ===== Frontend Serving =====
 try:
     static_dir = Path("backend/static/static")
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory="backend/static/static"), name="static_files")
-        logger.info("Static files mounted successfully")
-    else:
-        logger.warning("Static directory not found - frontend may not work")
 except Exception as e:
-    logger.warning(f"Could not mount static files: {e}")
+    logger.warning(f"Static mount failed: {e}")
 
-# Serve individual frontend files
 @app.get("/favicon.ico")
 async def favicon():
-    favicon_path = Path("backend/static/favicon.ico")
-    if favicon_path.exists():
-        return FileResponse(favicon_path)
-    raise HTTPException(status_code=404, detail="Favicon not found")
+    path = Path("backend/static/favicon.ico")
+    if path.exists():
+        return FileResponse(path)
+    raise HTTPException(status_code=404)
 
 @app.get("/manifest.json")
 async def manifest():
-    manifest_path = Path("backend/static/manifest.json")
-    if manifest_path.exists():
-        return FileResponse(manifest_path)
-    raise HTTPException(status_code=404, detail="Manifest not found")
+    path = Path("backend/static/manifest.json")
+    if path.exists():
+        return FileResponse(path)
+    raise HTTPException(status_code=404)
 
-# Catch-all for React SPA - This MUST be the very last route
 @app.get("/{path_name:path}")
 async def serve_spa(path_name: str):
-    """Serve React app for any non-API routes"""
+    api_paths = ["docs", "openapi.json", "redoc", "health", "status", "admin", "auth", "products", "orders", "upload", "search", "categories", "uploads", "api"]
     
-    # List of API endpoints that should return 404 (لا تشمل admin لوحده)
-    api_paths = [
-        "docs", "openapi.json", "redoc", "health", "status",
-        "admin/login", "admin/me", "admin/products", "admin/orders", "admin/upload", "admin/dashboard",
-        "auth", "products", "orders", "upload", "upload-simple",
-        "search", "categories", "uploads", "api"
-    ]
+    if any(path_name.startswith(p) for p in api_paths):
+        raise HTTPException(status_code=404)
     
-    # If this is a specific API endpoint, return 404
-    if any(path_name.startswith(api_path) for api_path in api_paths):
-        raise HTTPException(status_code=404, detail="API endpoint not found")
-    
-    # Try to serve specific file first
     frontend_dir = Path("backend/static")
     if path_name and frontend_dir.exists():
         file_path = frontend_dir / path_name
         if file_path.is_file():
             return FileResponse(file_path)
     
-    # For everything else including /admin (SPA routes), serve index.html
     index_path = frontend_dir / "index.html"
     if index_path.exists():
         return FileResponse(index_path, media_type="text/html")
     
-    # If no frontend files found, return API info
-    return JSONResponse(
-        content={
-            "message": "SK Bags API is running", 
-            "status": "healthy",
-            "endpoints": {
-                "products": "/products",
-                "health": "/health",
-                "status": "/status",
-                "docs": "/docs"
-            }
-        },
-        status_code=200
-    )
+    return JSONResponse({"message": "SK Bags API", "status": "healthy"})
 
 if __name__ == "__main__":
     import uvicorn
-    # استخدام PORT من متغيرات البيئة (Railway requirement)
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
-    
-    logger.info(f"Starting server on {host}:{port}")
-    uvicorn.run(
-        app, 
-        host=host, 
-        port=port,
-        log_level="info",
-        access_log=True
-    )
+    uvicorn.run(app, host=host, port=port, log_level="info")

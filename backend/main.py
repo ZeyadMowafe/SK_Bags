@@ -118,8 +118,6 @@ def _make_absolute_media(product: dict) -> dict:
         pass
     return product
 
-import io
-
 async def upload_to_supabase(file_content: bytes, filename: str, content_type: str) -> str:
     """رفع ملف إلى Supabase Storage"""
     try:
@@ -128,23 +126,20 @@ async def upload_to_supabase(file_content: bytes, filename: str, content_type: s
         
         logger.info(f"Uploading {filename} ({len(file_content)} bytes)")
         
-        # استخدام bytes مباشرة بدلاً من BytesIO
         result = supabase_storage.storage.from_(BUCKET_NAME).upload(
             path=filename,
-            file=file_content,  # 👈 bytes مباشرة بدون BytesIO
+            file=file_content,
             file_options={"content-type": content_type}
         )
         
         logger.info(f"Supabase upload response: {result}")
         
-        # التحقق من الأخطاء
         if isinstance(result, dict):
             if result.get("error"):
                 raise Exception(result["error"])
             if result.get("statusCode") and result["statusCode"] >= 400:
                 raise Exception(result.get("message", "Upload failed"))
         
-        # إنشاء URL العام
         public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{filename}"
         logger.info(f"Upload success: {public_url}")
         
@@ -548,24 +543,43 @@ async def manifest():
         return FileResponse(path)
     raise HTTPException(status_code=404)
 
+# ===== SPA Catch-All Route (MUST BE LAST) =====
 @app.get("/{path_name:path}")
 async def serve_spa(path_name: str):
-    api_paths = ["docs", "openapi.json", "redoc", "health", "status", "admin", "auth", "products", "orders", "upload", "search", "categories", "uploads", "api"]
+    """
+    Serve React SPA for all unmatched routes
+    This handler MUST be registered last to avoid conflicts with API routes
+    """
+    # قائمة مسارات API التي لا يجب معالجتها هنا
+    api_prefixes = [
+        "docs", "openapi.json", "redoc", "health", "status", 
+        "admin", "auth", "products", "orders", "upload", 
+        "search", "categories", "uploads", "api"
+    ]
     
-    if any(path_name.startswith(p) for p in api_paths):
-        raise HTTPException(status_code=404)
+    # تحقق إذا كان المسار يبدأ بأحد prefixes الـ API
+    if any(path_name.startswith(prefix) for prefix in api_prefixes):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
     
     frontend_dir = Path("backend/static")
+    
+    # محاولة إرجاع ملف ثابت إذا كان موجوداً
     if path_name and frontend_dir.exists():
         file_path = frontend_dir / path_name
-        if file_path.is_file():
+        if file_path.is_file() and file_path.exists():
             return FileResponse(file_path)
     
+    # إرجاع index.html للـ React Router (لجميع المسارات الأخرى)
     index_path = frontend_dir / "index.html"
     if index_path.exists():
         return FileResponse(index_path, media_type="text/html")
     
-    return JSONResponse({"message": "SK Bags API", "status": "healthy"})
+    # إذا لم يكن هناك build للـ frontend
+    return JSONResponse({
+        "message": "SK Bags API", 
+        "status": "healthy",
+        "note": "Frontend not built. Access /docs for API documentation."
+    })
 
 if __name__ == "__main__":
     import uvicorn

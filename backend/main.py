@@ -550,26 +550,30 @@ async def serve_spa(path_name: str):
     Serve React SPA for all unmatched routes
     This handler MUST be registered last to avoid conflicts with API routes
     """
-    # قائمة مسارات API التي لا يجب معالجتها هنا
-    api_prefixes = [
+    # قائمة مسارات API الفعلية فقط (بدون /admin لأنه صفحة React)
+    api_only_prefixes = [
         "docs", "openapi.json", "redoc", "health", "status", 
-        "admin", "auth", "products", "orders", "upload", 
-        "search", "categories", "uploads", "api"
+        "auth/login", "admin/login", "admin/me", "admin/products", 
+        "admin/orders", "admin/upload", "admin/storage-status", "admin/dashboard",
+        "products/", "orders", "upload", "search", "categories", "api"
     ]
     
-    # تحقق إذا كان المسار يبدأ بأحد prefixes الـ API
-    if any(path_name.startswith(prefix) for prefix in api_prefixes):
+    # تحقق إذا كان المسار API endpoint حقيقي
+    is_api_endpoint = any(path_name.startswith(prefix) for prefix in api_only_prefixes)
+    
+    # إذا كان API endpoint لكن غير موجود، ارجع 404
+    if is_api_endpoint:
         raise HTTPException(status_code=404, detail="API endpoint not found")
     
     frontend_dir = Path("backend/static")
     
-    # محاولة إرجاع ملف ثابت إذا كان موجوداً
+    # محاولة إرجاع ملف ثابت إذا كان موجوداً (CSS, JS, images)
     if path_name and frontend_dir.exists():
         file_path = frontend_dir / path_name
         if file_path.is_file() and file_path.exists():
             return FileResponse(file_path)
     
-    # إرجاع index.html للـ React Router (لجميع المسارات الأخرى)
+    # إرجاع index.html للـ React Router (لجميع المسارات الأخرى بما فيها /admin)
     index_path = frontend_dir / "index.html"
     if index_path.exists():
         return FileResponse(index_path, media_type="text/html")
